@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { AvailabilitySettings } from "@/components/availability/AvailabilitySettings";
-import { AppointmentList } from "@/components/appointments/AppointmentList";
+import { AppointmentCalendar } from "@/components/appointments/AppointmentCalendar";
 import { WeekNavigator } from "@/components/appointments/WeekNavigator";
 import { getOwnedBusiness } from "@/lib/auth/permissions";
 import type { AppointmentWithClient } from "@/actions/appointments";
@@ -71,7 +71,10 @@ export default async function CalendarPage({
         <Suspense fallback={null}>
           <WeekNavigator weekStart={formatWeekParam(weekStart)} />
         </Suspense>
-        <AppointmentList appointments={appointments} />
+        <AppointmentCalendar
+          weekStart={formatWeekParam(weekStart)}
+          appointments={appointments}
+        />
       </section>
 
       <section className="space-y-4">

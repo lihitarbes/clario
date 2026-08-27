@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useMemo } from "react";
 import {
   createAvailabilityAction,
   deleteAvailabilityAction,
@@ -14,18 +14,33 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DAY_OF_WEEK_LABELS } from "@/lib/appointments/constants";
 import { formatTimeDisplay } from "@/lib/appointments/display";
+import { listSlotTimes } from "@/lib/appointments/time";
 import type { BusinessAvailability } from "@/types/database";
 
 type AvailabilitySettingsProps = {
   slots: BusinessAvailability[];
 };
 
+const selectClassName =
+  "flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400";
+
 function dayOptions() {
   return DAY_OF_WEEK_LABELS.map((label, value) => ({ label, value }));
+}
+
+function timeOptionsFor(value?: string): string[] {
+  const slots = listSlotTimes();
+  if (!value) {
+    return slots;
+  }
+  const normalized = value.slice(0, 5);
+  if (slots.includes(normalized)) {
+    return slots;
+  }
+  return [normalized, ...slots].sort();
 }
 
 export function AvailabilitySettings({ slots }: AvailabilitySettingsProps) {
@@ -33,6 +48,8 @@ export function AvailabilitySettings({ slots }: AvailabilitySettingsProps) {
     createAvailabilityAction,
     null,
   );
+
+  const slotTimes = useMemo(() => listSlotTimes(), []);
 
   const sorted = [...slots].sort((a, b) => {
     if (a.day_of_week !== b.day_of_week) {
@@ -48,7 +65,7 @@ export function AvailabilitySettings({ slots }: AvailabilitySettingsProps) {
           <CardTitle className="text-base">Add availability</CardTitle>
           <CardDescription>
             Set recurring weekly hours when clients can book (used in later
-            milestones).
+            milestones). Times use 15-minute increments.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -59,7 +76,7 @@ export function AvailabilitySettings({ slots }: AvailabilitySettingsProps) {
                 id="add-dayOfWeek"
                 name="dayOfWeek"
                 required
-                className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                className={selectClassName}
               >
                 {dayOptions().map(({ label, value }) => (
                   <option key={value} value={value}>
@@ -71,12 +88,42 @@ export function AvailabilitySettings({ slots }: AvailabilitySettingsProps) {
 
             <div className="space-y-2">
               <Label htmlFor="add-startTime">Start</Label>
-              <Input id="add-startTime" name="startTime" type="time" required />
+              <select
+                id="add-startTime"
+                name="startTime"
+                required
+                defaultValue=""
+                className={selectClassName}
+              >
+                <option value="" disabled>
+                  Select time
+                </option>
+                {slotTimes.map((time) => (
+                  <option key={time} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="add-endTime">End</Label>
-              <Input id="add-endTime" name="endTime" type="time" required />
+              <select
+                id="add-endTime"
+                name="endTime"
+                required
+                defaultValue=""
+                className={selectClassName}
+              >
+                <option value="" disabled>
+                  Select time
+                </option>
+                {slotTimes.map((time) => (
+                  <option key={time} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-end">
@@ -135,6 +182,14 @@ function AvailabilityRow({ slot }: { slot: BusinessAvailability }) {
     null,
   );
 
+  const startDisplay = formatTimeDisplay(slot.start_time);
+  const endDisplay = formatTimeDisplay(slot.end_time);
+  const startOptions = useMemo(
+    () => timeOptionsFor(startDisplay),
+    [startDisplay],
+  );
+  const endOptions = useMemo(() => timeOptionsFor(endDisplay), [endDisplay]);
+
   function handleDelete(event: React.FormEvent<HTMLFormElement>) {
     if (!window.confirm("Remove this availability range?")) {
       event.preventDefault();
@@ -165,7 +220,7 @@ function AvailabilityRow({ slot }: { slot: BusinessAvailability }) {
             name="dayOfWeek"
             defaultValue={slot.day_of_week}
             required
-            className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+            className={selectClassName}
           >
             {dayOptions().map(({ label, value }) => (
               <option key={value} value={value}>
@@ -177,24 +232,36 @@ function AvailabilityRow({ slot }: { slot: BusinessAvailability }) {
 
         <div className="space-y-2">
           <Label htmlFor={`start-${slot.id}`}>Start</Label>
-          <Input
+          <select
             id={`start-${slot.id}`}
             name="startTime"
-            type="time"
-            defaultValue={formatTimeDisplay(slot.start_time)}
+            defaultValue={startDisplay}
             required
-          />
+            className={selectClassName}
+          >
+            {startOptions.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="space-y-2">
           <Label htmlFor={`end-${slot.id}`}>End</Label>
-          <Input
+          <select
             id={`end-${slot.id}`}
             name="endTime"
-            type="time"
-            defaultValue={formatTimeDisplay(slot.end_time)}
+            defaultValue={endDisplay}
             required
-          />
+            className={selectClassName}
+          >
+            {endOptions.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="flex flex-wrap items-end gap-2">

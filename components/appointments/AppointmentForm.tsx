@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import {
   createAppointmentAction,
   updateAppointmentAction,
@@ -17,10 +17,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { computeDurationMinutes } from "@/lib/appointments/display";
-import { formatDateTimeLocal } from "@/lib/appointments/time";
+import {
+  formatDateTimeLocal,
+  joinDateTimeLocal,
+  listDurationOptions,
+  listSlotTimes,
+  splitDateTimeLocal,
+} from "@/lib/appointments/time";
 import type { Appointment, Client } from "@/types/database";
 
 type ClientOption = Pick<Client, "id" | "full_name">;
+
+const selectClassName =
+  "flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400";
 
 type AppointmentFormProps =
   | {
@@ -49,15 +58,36 @@ export function AppointmentForm({
     mode === "create" ? createAppointmentAction : updateAppointmentAction;
   const [state, formAction, pending] = useActionState(action, null);
 
-  const startTimeLocal =
+  const initialStartLocal =
     mode === "edit"
       ? formatDateTimeLocal(new Date(appointment.start_time))
       : (defaultStartTimeLocal ?? "");
+
+  const initialParts = splitDateTimeLocal(initialStartLocal);
+  const [dateLocal, setDateLocal] = useState(initialParts.date);
+  const [timeLocal, setTimeLocal] = useState(
+    initialParts.time || "09:00",
+  );
 
   const durationMinutes =
     mode === "edit"
       ? computeDurationMinutes(appointment.start_time, appointment.end_time)
       : defaultDurationMinutes;
+
+  const slotTimes = useMemo(() => listSlotTimes(), []);
+  const durationOptions = useMemo(() => {
+    const options = listDurationOptions();
+    if (!options.includes(durationMinutes)) {
+      return [...options, durationMinutes].sort((a, b) => a - b);
+    }
+    return options;
+  }, [durationMinutes]);
+  const startTimeLocal = joinDateTimeLocal(dateLocal, timeLocal);
+
+  // Ensure the select has a matching option even if legacy data is off-slot.
+  const timeOptions = slotTimes.includes(timeLocal)
+    ? slotTimes
+    : [timeLocal, ...slotTimes].sort();
 
   if (clients.length === 0) {
     return (
@@ -79,7 +109,8 @@ export function AppointmentForm({
           {mode === "create" ? "New appointment" : "Edit appointment"}
         </CardTitle>
         <CardDescription>
-          Times use 15-minute increments. Appointments are stored in UTC.
+          Choose a date and a 15-minute start time. Appointments are stored in
+          UTC.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -88,6 +119,8 @@ export function AppointmentForm({
             <input type="hidden" name="appointmentId" value={appointment.id} />
           ) : null}
 
+          <input type="hidden" name="startTimeLocal" value={startTimeLocal} />
+
           <div className="space-y-2">
             <Label htmlFor="clientId">Client</Label>
             <select
@@ -95,7 +128,7 @@ export function AppointmentForm({
               name="clientId"
               defaultValue={mode === "edit" ? appointment.client_id : ""}
               required
-              className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+              className={selectClassName}
             >
               <option value="" disabled>
                 Select a client
@@ -108,31 +141,50 @@ export function AppointmentForm({
             </select>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="startTimeLocal">Start date & time</Label>
+              <Label htmlFor="startDate">Date</Label>
               <Input
-                id="startTimeLocal"
-                name="startTimeLocal"
-                type="datetime-local"
-                step={900}
-                defaultValue={startTimeLocal}
+                id="startDate"
+                type="date"
+                value={dateLocal}
+                onChange={(event) => setDateLocal(event.target.value)}
                 required
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="durationMinutes">Duration (minutes)</Label>
-              <Input
+              <Label htmlFor="startTime">Start time</Label>
+              <select
+                id="startTime"
+                value={timeLocal}
+                onChange={(event) => setTimeLocal(event.target.value)}
+                required
+                className={selectClassName}
+              >
+                {timeOptions.map((slot) => (
+                  <option key={slot} value={slot}>
+                    {slot}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="durationMinutes">Duration</Label>
+              <select
                 id="durationMinutes"
                 name="durationMinutes"
-                type="number"
-                min={15}
-                max={480}
-                step={15}
                 defaultValue={durationMinutes}
                 required
-              />
+                className={selectClassName}
+              >
+                {durationOptions.map((minutes) => (
+                  <option key={minutes} value={minutes}>
+                    {minutes} minutes
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
