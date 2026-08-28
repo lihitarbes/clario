@@ -5,10 +5,20 @@ import {
 } from "@/lib/appointments/time";
 
 export const appointmentStatusSchema = z.enum([
+  "pending",
   "scheduled",
   "completed",
   "cancelled",
 ]);
+
+/** Client booking: selects a prepared slot (datetime-local) and linked client. */
+export const clientBookAppointmentSchema = z.object({
+  clientId: z.string().uuid("Select a business."),
+  startTimeLocal: z
+    .string()
+    .trim()
+    .min(1, "Select an available time slot."),
+});
 
 const optionalNotes = z
   .string()

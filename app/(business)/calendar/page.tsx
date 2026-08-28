@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { AvailabilitySettings } from "@/components/availability/AvailabilitySettings";
 import { AppointmentCalendar } from "@/components/appointments/AppointmentCalendar";
+import { PendingAppointmentRequests } from "@/components/appointments/PendingAppointmentRequests";
 import { WeekNavigator } from "@/components/appointments/WeekNavigator";
 import { getOwnedBusiness } from "@/lib/auth/permissions";
 import type { AppointmentWithClient } from "@/actions/appointments";
@@ -32,24 +33,33 @@ export default async function CalendarPage({
 
   const supabase = await createClient();
 
-  const [availabilityResult, appointmentsResult] = await Promise.all([
-    supabase
-      .from("business_availability")
-      .select("*")
-      .eq("business_id", business.id)
-      .order("day_of_week")
-      .order("start_time"),
-    supabase
-      .from("appointments")
-      .select("*, clients(full_name, email)")
-      .eq("business_id", business.id)
-      .gte("start_time", weekStart.toISOString())
-      .lt("start_time", weekEnd.toISOString())
-      .order("start_time"),
-  ]);
+  const [availabilityResult, appointmentsResult, pendingResult] =
+    await Promise.all([
+      supabase
+        .from("business_availability")
+        .select("*")
+        .eq("business_id", business.id)
+        .order("day_of_week")
+        .order("start_time"),
+      supabase
+        .from("appointments")
+        .select("*, clients(full_name, email)")
+        .eq("business_id", business.id)
+        .gte("start_time", weekStart.toISOString())
+        .lt("start_time", weekEnd.toISOString())
+        .order("start_time"),
+      supabase
+        .from("appointments")
+        .select("*, clients(full_name, email)")
+        .eq("business_id", business.id)
+        .eq("status", "pending")
+        .order("start_time"),
+    ]);
 
   const availability = availabilityResult.data ?? [];
   const appointments = (appointmentsResult.data ??
+    []) as AppointmentWithClient[];
+  const pendingAppointments = (pendingResult.data ??
     []) as AppointmentWithClient[];
 
   return (
@@ -65,6 +75,15 @@ export default async function CalendarPage({
           <Link href="/calendar/new">New appointment</Link>
         </Button>
       </div>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium text-zinc-900">Pending requests</h2>
+        <p className="text-sm text-zinc-600">
+          Review and approve client appointment requests. Pending times remain
+          blocked until approved or declined.
+        </p>
+        <PendingAppointmentRequests appointments={pendingAppointments} />
+      </section>
 
       <section className="space-y-4">
         <h2 className="text-lg font-medium text-zinc-900">Appointments</h2>

@@ -31,16 +31,30 @@ export async function linkClientsByAuthenticatedEmail(
   }
 
   // RLS policy "clients_link_by_email" restricts which rows may be updated.
-  const { data, error } = await supabase
+  // Do not chain `.select()` on this update: RETURNING re-checks SELECT RLS, and
+  // unlinked rows are not visible to clients via SELECT. That can fail or return
+  // empty even when the UPDATE WITH CHECK would succeed (same class of bug as
+  // createClientAction insert + select).
+  const { error } = await supabase
     .from("clients")
     .update({ user_id: userId })
     .is("user_id", null)
-    .is("archived_at", null)
-    .select("id");
+    .is("archived_at", null);
 
   if (error) {
     return { ok: false, error: mapDatabaseError(error.message) };
   }
 
-  return { ok: true, linkedCount: data?.length ?? 0 };
+  // Count linked rows with a separate SELECT (allowed once user_id is set).
+  const { data: linked, error: linkedError } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("user_id", userId)
+    .is("archived_at", null);
+
+  if (linkedError) {
+    return { ok: false, error: mapDatabaseError(linkedError.message) };
+  }
+
+  return { ok: true, linkedCount: linked?.length ?? 0 };
 }

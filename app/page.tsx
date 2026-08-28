@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UserMenu } from "@/components/layout/UserMenu";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -7,20 +8,39 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getHomePathForRole } from "@/lib/auth/routing";
+import { getCurrentProfile } from "@/lib/auth/permissions";
 
-export default function LandingPage() {
+export const dynamic = "force-dynamic";
+
+export default async function LandingPage() {
+  const profile = await getCurrentProfile();
+
   return (
     <div className="min-h-full bg-zinc-50">
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <span className="text-lg font-semibold text-zinc-900">Clario</span>
           <div className="flex items-center gap-2">
-            <Button asChild variant="ghost">
-              <Link href="/login">Log in</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/signup">Sign up</Link>
-            </Button>
+            {profile ? (
+              <>
+                <Button asChild variant="ghost">
+                  <Link href={getHomePathForRole(profile.role)}>
+                    Go to app
+                  </Link>
+                </Button>
+                <UserMenu profile={profile} />
+              </>
+            ) : (
+              <>
+                <Button asChild variant="ghost">
+                  <Link href="/login">Log in</Link>
+                </Button>
+                <Button asChild>
+                  <Link href="/signup">Sign up</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -37,12 +57,22 @@ export default function LandingPage() {
             shared information.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button asChild size="lg">
-              <Link href="/signup">Get started</Link>
-            </Button>
-            <Button asChild variant="outline" size="lg">
-              <Link href="/login">Log in</Link>
-            </Button>
+            {profile ? (
+              <Button asChild size="lg">
+                <Link href={getHomePathForRole(profile.role)}>
+                  Continue to your workspace
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button asChild size="lg">
+                  <Link href="/signup">Get started</Link>
+                </Button>
+                <Button asChild variant="outline" size="lg">
+                  <Link href="/login">Log in</Link>
+                </Button>
+              </>
+            )}
           </div>
         </section>
 
@@ -57,7 +87,15 @@ export default function LandingPage() {
             </CardHeader>
             <CardContent>
               <Button asChild variant="outline">
-                <Link href="/dashboard">Business area (preview)</Link>
+                <Link
+                  href={
+                    profile?.role === "business_owner"
+                      ? "/dashboard"
+                      : "/login"
+                  }
+                >
+                  Business area
+                </Link>
               </Button>
             </CardContent>
           </Card>
@@ -71,7 +109,13 @@ export default function LandingPage() {
             </CardHeader>
             <CardContent>
               <Button asChild variant="outline">
-                <Link href="/home">Client area (preview)</Link>
+                <Link
+                  href={
+                    profile?.role === "client" ? "/home" : "/login"
+                  }
+                >
+                  Client area
+                </Link>
               </Button>
             </CardContent>
           </Card>

@@ -6,7 +6,11 @@
 
 export type UserRole = "business_owner" | "client";
 
-export type AppointmentStatus = "scheduled" | "completed" | "cancelled";
+export type AppointmentStatus =
+  | "pending"
+  | "scheduled"
+  | "completed"
+  | "cancelled";
 
 export type DocumentType =
   | "receipt"
@@ -17,6 +21,12 @@ export type DocumentType =
 export type FormAssignmentStatus = "pending" | "completed";
 
 export type PurchaseStatus = "pending" | "confirmed" | "cancelled";
+
+export type NotificationType =
+  | "appointment_request"
+  | "appointment_cancelled_by_client"
+  | "appointment_approved"
+  | "appointment_declined";
 
 /** JSON array stored on forms.fields */
 export type FormFieldDefinition = {
@@ -166,6 +176,19 @@ export type Document = {
   file_path: string;
   file_name: string;
   mime_type: string;
+  created_at: string;
+};
+
+export type Notification = {
+  id: string;
+  recipient_profile_id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  appointment_id: string | null;
+  business_id: string | null;
+  client_id: string | null;
+  read_at: string | null;
   created_at: string;
 };
 
@@ -428,6 +451,25 @@ export type Database = {
           file_path?: string;
           file_name?: string;
           mime_type?: string;
+        };
+        Relationships: [];
+      };
+      notifications: {
+        Row: Notification;
+        Insert: {
+          id?: string;
+          recipient_profile_id: string;
+          type: NotificationType;
+          title: string;
+          message: string;
+          appointment_id?: string | null;
+          business_id?: string | null;
+          client_id?: string | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          read_at?: string | null;
         };
         Relationships: [];
       };

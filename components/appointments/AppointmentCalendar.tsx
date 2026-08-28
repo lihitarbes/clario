@@ -170,7 +170,9 @@ export function AppointmentCalendar({
                             {clientName}
                           </span>
                           <span className="block truncate text-[10px] leading-tight opacity-80">
-                            {startLabel}
+                            {appointment.status === "pending"
+                              ? `Pending · ${startLabel}`
+                              : startLabel}
                           </span>
                         </Link>
                       );

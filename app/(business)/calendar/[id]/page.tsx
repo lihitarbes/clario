@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppointmentForm } from "@/components/appointments/AppointmentForm";
 import { AppointmentStatusActions } from "@/components/appointments/AppointmentStatusActions";
+import { PendingAppointmentActions } from "@/components/appointments/PendingAppointmentActions";
 import {
   Card,
   CardContent,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/appointments/display";
 import { getOwnedBusiness } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,7 @@ export default async function AppointmentDetailPage({
   const clientName =
     typedAppointment.clients?.full_name ?? "Unknown client";
   const isScheduled = typedAppointment.status === "scheduled";
+  const isPending = typedAppointment.status === "pending";
 
   const { data: clients } = isScheduled
     ? await supabase
@@ -69,7 +72,10 @@ export default async function AppointmentDetailPage({
         </h1>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
           <span
-            className={`rounded-full px-2 py-1 text-xs font-medium ${appointmentStatusClassName(typedAppointment.status)}`}
+            className={cn(
+              "rounded-full border px-2 py-1 text-xs font-medium",
+              appointmentStatusClassName(typedAppointment.status),
+            )}
           >
             {appointmentStatusLabel(typedAppointment.status)}
           </span>
@@ -81,6 +87,36 @@ export default async function AppointmentDetailPage({
           </span>
         </div>
       </div>
+
+      {isPending ? (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Appointment details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div>
+                <p className="font-medium text-zinc-900">Client</p>
+                <p className="text-zinc-600">{clientName}</p>
+                {typedAppointment.clients?.email ? (
+                  <p className="text-zinc-500">
+                    {typedAppointment.clients.email}
+                  </p>
+                ) : null}
+              </div>
+              {typedAppointment.notes ? (
+                <div>
+                  <p className="font-medium text-zinc-900">Notes</p>
+                  <p className="whitespace-pre-wrap text-zinc-600">
+                    {typedAppointment.notes}
+                  </p>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+          <PendingAppointmentActions appointmentId={typedAppointment.id} />
+        </>
+      ) : null}
 
       {isScheduled ? (
         <>
@@ -94,7 +130,9 @@ export default async function AppointmentDetailPage({
           />
           <AppointmentStatusActions appointmentId={typedAppointment.id} />
         </>
-      ) : (
+      ) : null}
+
+      {!isPending && !isScheduled ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Appointment details</CardTitle>
@@ -117,7 +155,7 @@ export default async function AppointmentDetailPage({
             ) : null}
           </CardContent>
         </Card>
-      )}
+      ) : null}
     </div>
   );
 }

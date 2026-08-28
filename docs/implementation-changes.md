@@ -34,7 +34,7 @@ The original PDF is not modified. When the course documentation is updated later
 
 | Field | Detail |
 |-------|--------|
-| **What changed** | Added `form_assignments` table so forms can be assigned before submission. Total application tables: **14**. |
+| **What changed** | Added `form_assignments` table so forms can be assigned before submission. Original application tables: **14** (see Milestone 5.3 for `notifications`, total **15**). |
 | **Why** | Forms need a pending/completed assignment state before the client submits. |
 | **Required or recommended** | **Required** (approved product decision) |
 | **Original doc section** | Architecture Design §3; Technical Design §3 |
@@ -100,8 +100,8 @@ The original PDF is not modified. When the course documentation is updated later
 
 | Field | Detail |
 |-------|--------|
-| **What changed** | Statuses: `scheduled`, `completed`, `cancelled`. One visit per completed appointment. No visits without appointments in MVP. Slot granularity **15** minutes. Timestamps stored as `timestamptz` (UTC). |
-| **Why** | Approved MVP scope and scheduling rules. |
+| **What changed** | Statuses: `pending`, `scheduled`, `completed`, `cancelled`. Client self-booking creates `pending` (owner must approve). Owner-created appointments remain `scheduled`. Both `pending` and `scheduled` block availability slots. One visit per completed appointment. No visits without appointments in MVP. Slot granularity **15** minutes. Timestamps stored as `timestamptz` (UTC). |
+| **Why** | Approved MVP scope and scheduling rules; owner approval before client bookings become confirmed. |
 | **Required or recommended** | **Required** (approved product decision) |
 | **Original doc section** | Technical Design §3 (Appointments, Visits); §6 (Visit management, Appointment booking) |
 
@@ -256,7 +256,7 @@ The original PDF is not modified. When the course documentation is updated later
 
 | Field | Detail |
 |-------|--------|
-| **What changed** | Business availability CRUD on `/calendar` using `business_availability`. Appointment management for business owners: list (week navigation), create (`/calendar/new`), view/edit/cancel/complete (`/calendar/[id]`). Overlap checks for availability ranges and scheduled appointments enforced in Server Actions before insert/update. 15-minute slot alignment and default duration from business settings. No visit records created on completion. Client self-booking routes remain placeholders. |
+| **What changed** | Business availability CRUD on `/calendar` using `business_availability`. Appointment management for business owners: list (week navigation), create (`/calendar/new`), view/edit/cancel/complete (`/calendar/[id]`). Overlap checks for availability ranges and scheduled appointments enforced in Server Actions before insert/update. 15-minute slot alignment and default duration from business settings. No visit records created on completion. Client self-booking routes remain placeholders (implemented in Milestone 5). |
 | **Why** | Milestone 4 scope. |
 | **Required or recommended** | **Required** (implementation plan) |
 | **Original doc section** | Product Specification §4–5; Technical Design §6 (Appointment booking, Visit management — scheduling portion only) |
@@ -282,6 +282,76 @@ The original PDF is not modified. When the course documentation is updated later
 | **Why** | Observed during Milestone 2 manual testing; deferred to a future UX improvement. |
 | **Required or recommended** | **Recommended** (future UX improvement) |
 | **Original doc section** | Product Specification §6 (Authentication flows) |
+
+---
+
+## Milestone 5 — client booking + owner approval
+
+### Appointments — `pending` approval workflow
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Added appointment status `pending`. Client booking creates `pending` requests. Business owner approves (`pending → scheduled`) or rejects (`pending → cancelled`). Owner-created appointments remain `scheduled`. Clients may cancel future `pending` or `scheduled` appointments (no reschedule/edit). Both `pending` and `scheduled` block availability slots and overlap checks. |
+| **Why** | Keep the business owner in control of confirming client self-bookings while still reserving the requested slot immediately. |
+| **Required or recommended** | **Required** (approved product decision) |
+| **Original doc section** | Product Specification §5–6 (Appointment booking); Technical Design §3 (Appointments), §6 (Appointment booking) |
+
+---
+
+### Milestone 5 implementation notes
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Client `/appointments` list (upcoming/previous) and `/appointments/book` slot-based booking UI. Availability-aware slot generation (15-minute granularity, full duration must fit availability). Multi-business selector when a client is linked to more than one business. Owner calendar shows pending requests; detail page supports Approve/Reject. Migration `20260827140000_appointment_pending_status.sql` extends status CHECK, updates blocking index, and tightens client INSERT/UPDATE RLS. Google Calendar and Visits remain deferred. |
+| **Why** | Milestone 5 scope. |
+| **Required or recommended** | **Required** (implementation plan) |
+| **Original doc section** | Product Specification §4–5; Technical Design §5–6 |
+
+---
+
+## Milestone 5.1 — auth & navigation UX
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | `UserMenu` dropdown in business and client nav (avatar initials, name, role, logout). Landing page session-aware routing. Authenticated users visiting `/login` or `/signup` redirect to role home via `proxy.ts`. Removed standalone `LogoutButton`. |
+| **Why** | Milestone 5.1 scope — polished authenticated header without new product features. |
+| **Required or recommended** | **Required** (implementation plan) |
+| **Original doc section** | Product Specification §6 (Authentication flows) |
+
+---
+
+## Milestone 5.2 — pending requests queue
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Owner `/calendar` shows a pending appointment requests queue above the weekly grid (all pending appointments, not week-filtered). Inline Approve/Decline actions on each row; detail page approve/reject unchanged. |
+| **Why** | Milestone 5.2 scope — faster owner workflow for booking approvals. |
+| **Required or recommended** | **Required** (implementation plan) |
+| **Original doc section** | Product Specification §5–6 (Appointment booking) |
+
+---
+
+## Milestone 5.3 — in-app notifications
+
+### Database — `notifications` table (15th application table)
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Added `notifications` table with RLS (SELECT own; UPDATE mark-read only). Rows created by SECURITY DEFINER triggers on appointment INSERT/UPDATE — not by application code. Types: `appointment_request`, `appointment_cancelled_by_client`, `appointment_approved`, `appointment_declined`. Migration `20260828120000_notifications.sql`. |
+| **Why** | In-app notification center for booking workflow events without email/SMS/push. |
+| **Required or recommended** | **Required** (approved product decision) |
+| **Original doc section** | Product Specification §5–6; Technical Design §6 (Appointment booking) |
+
+---
+
+### Milestone 5.3 implementation notes
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Notification bell in business and client nav with unread badge, dropdown list (title, message, relative timestamp, read/unread styling), per-notification mark-read, and mark-all-read. Server Actions update `read_at` only (RLS + trigger enforced). No realtime subscriptions or external notification services. |
+| **Why** | Milestone 5.3 application layer after approved database triggers. |
+| **Required or recommended** | **Required** (implementation plan) |
+| **Original doc section** | Product Specification §4–5 |
 
 ---
 

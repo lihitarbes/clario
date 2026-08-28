@@ -35,6 +35,8 @@ export function formatAppointmentTimeRange(
 
 export function appointmentStatusLabel(status: AppointmentStatus): string {
   switch (status) {
+    case "pending":
+      return "Pending approval";
     case "scheduled":
       return "Scheduled";
     case "completed":
@@ -46,12 +48,14 @@ export function appointmentStatusLabel(status: AppointmentStatus): string {
 
 export function appointmentStatusClassName(status: AppointmentStatus): string {
   switch (status) {
+    case "pending":
+      return "bg-amber-100 text-amber-900 border-amber-200";
     case "scheduled":
-      return "bg-blue-100 text-blue-800";
+      return "bg-blue-100 text-blue-800 border-blue-200";
     case "completed":
-      return "bg-green-100 text-green-800";
+      return "bg-green-100 text-green-800 border-green-200";
     case "cancelled":
-      return "bg-zinc-100 text-zinc-600";
+      return "bg-zinc-100 text-zinc-600 border-zinc-200";
   }
 }
 

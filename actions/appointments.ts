@@ -4,18 +4,29 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { mapAppointmentError } from "@/lib/auth/appointment-errors";
 import { requireBusinessOwnerContext } from "@/lib/auth/require-business-owner";
-import { hasScheduledAppointmentOverlap } from "@/lib/appointments/overlap";
+import { requireClientContext } from "@/lib/auth/require-client";
+import { hasBlockingAppointmentOverlap } from "@/lib/appointments/overlap";
+import { generateAvailableSlots } from "@/lib/appointments/slots";
+import {
+  isSlotAligned,
+  parseDateTimeLocal,
+} from "@/lib/appointments/time";
 import {
   appointmentFormSchema,
   appointmentIdSchema,
+  clientBookAppointmentSchema,
 } from "@/lib/validation/appointments";
 import { actionError, type ActionResult } from "@/types/actions";
-import type { Appointment, Client } from "@/types/database";
+import type { Appointment, Business, Client } from "@/types/database";
 
 type AppointmentFormState = ActionResult<{ message?: string }> | null;
 
 export type AppointmentWithClient = Appointment & {
   clients: Pick<Client, "full_name" | "email"> | null;
+};
+
+export type AppointmentWithBusiness = Appointment & {
+  businesses: Pick<Business, "id" | "name"> | null;
 };
 
 async function getActiveClientForOwner(clientId: string) {
@@ -86,6 +97,9 @@ function parseStartTimeFromForm(startTimeLocal: string) {
   return start.toISOString();
 }
 
+const OVERLAP_MESSAGE =
+  "This time overlaps another pending or scheduled appointment.";
+
 export async function createAppointmentAction(
   _prevState: AppointmentFormState,
   formData: FormData,
@@ -120,16 +134,14 @@ export async function createAppointmentAction(
   const { supabase, business } = clientLookup.ctx;
 
   try {
-    const overlaps = await hasScheduledAppointmentOverlap(
+    const overlaps = await hasBlockingAppointmentOverlap(
       supabase,
       business.id,
       startTimeIso,
       endTimeIso,
     );
     if (overlaps) {
-      return actionError(
-        "This time overlaps another scheduled appointment.",
-      );
+      return actionError(OVERLAP_MESSAGE);
     }
   } catch (error) {
     return actionError(
@@ -155,6 +167,7 @@ export async function createAppointmentAction(
   }
 
   revalidatePath("/calendar");
+  revalidatePath("/appointments");
   redirect(`/calendar/${appointmentId}`);
 }
 
@@ -201,7 +214,7 @@ export async function updateAppointmentAction(
   const { supabase, business } = lookup.ctx;
 
   try {
-    const overlaps = await hasScheduledAppointmentOverlap(
+    const overlaps = await hasBlockingAppointmentOverlap(
       supabase,
       business.id,
       startTimeIso,
@@ -209,9 +222,7 @@ export async function updateAppointmentAction(
       lookup.appointment.id,
     );
     if (overlaps) {
-      return actionError(
-        "This time overlaps another scheduled appointment.",
-      );
+      return actionError(OVERLAP_MESSAGE);
     }
   } catch (error) {
     return actionError(
@@ -238,6 +249,7 @@ export async function updateAppointmentAction(
 
   revalidatePath("/calendar");
   revalidatePath(`/calendar/${lookup.appointment.id}`);
+  revalidatePath("/appointments");
 
   return { success: true, data: { message: "Appointment updated." } };
 }
@@ -273,6 +285,7 @@ export async function cancelAppointmentAction(
 
   revalidatePath("/calendar");
   revalidatePath(`/calendar/${lookup.appointment.id}`);
+  revalidatePath("/appointments");
   redirect("/calendar");
 }
 
@@ -307,6 +320,297 @@ export async function completeAppointmentAction(
 
   revalidatePath("/calendar");
   revalidatePath(`/calendar/${lookup.appointment.id}`);
+  revalidatePath("/appointments");
 
   return { success: true, data: { message: "Appointment marked completed." } };
+}
+
+export async function approveAppointmentAction(
+  _prevState: AppointmentFormState,
+  formData: FormData,
+): Promise<AppointmentFormState> {
+  const idResult = appointmentIdSchema.safeParse(formData.get("appointmentId"));
+  if (!idResult.success) {
+    return actionError("Invalid appointment.");
+  }
+
+  const lookup = await getAppointmentForOwner(idResult.data);
+  if (!lookup.ok) {
+    return actionError(lookup.error);
+  }
+
+  if (lookup.appointment.status !== "pending") {
+    return actionError("Only pending requests can be approved.");
+  }
+
+  const { supabase, business } = lookup.ctx;
+  const { appointment } = lookup;
+
+  try {
+    const overlaps = await hasBlockingAppointmentOverlap(
+      supabase,
+      business.id,
+      appointment.start_time,
+      appointment.end_time,
+      appointment.id,
+    );
+    if (overlaps) {
+      return actionError(OVERLAP_MESSAGE);
+    }
+  } catch (error) {
+    return actionError(
+      mapAppointmentError(
+        error instanceof Error ? error.message : "Unknown error",
+      ),
+    );
+  }
+
+  const { error } = await supabase
+    .from("appointments")
+    .update({ status: "scheduled" })
+    .eq("id", appointment.id)
+    .eq("business_id", business.id);
+
+  if (error) {
+    return actionError(mapAppointmentError(error.message));
+  }
+
+  revalidatePath("/calendar");
+  revalidatePath(`/calendar/${appointment.id}`);
+  revalidatePath("/appointments");
+
+  return { success: true, data: { message: "Appointment approved." } };
+}
+
+export async function rejectAppointmentAction(
+  _prevState: AppointmentFormState,
+  formData: FormData,
+): Promise<AppointmentFormState> {
+  const idResult = appointmentIdSchema.safeParse(formData.get("appointmentId"));
+  if (!idResult.success) {
+    return actionError("Invalid appointment.");
+  }
+
+  const lookup = await getAppointmentForOwner(idResult.data);
+  if (!lookup.ok) {
+    return actionError(lookup.error);
+  }
+
+  if (lookup.appointment.status !== "pending") {
+    return actionError("Only pending requests can be rejected.");
+  }
+
+  const { supabase, business } = lookup.ctx;
+  const { error } = await supabase
+    .from("appointments")
+    .update({ status: "cancelled" })
+    .eq("id", lookup.appointment.id)
+    .eq("business_id", business.id);
+
+  if (error) {
+    return actionError(mapAppointmentError(error.message));
+  }
+
+  revalidatePath("/calendar");
+  revalidatePath(`/calendar/${lookup.appointment.id}`);
+  revalidatePath("/appointments");
+
+  return { success: true, data: { message: "Appointment request declined." } };
+}
+
+export async function bookAppointmentAction(
+  _prevState: AppointmentFormState,
+  formData: FormData,
+): Promise<AppointmentFormState> {
+  const auth = await requireClientContext();
+  if (!auth.ok) {
+    return actionError(auth.error);
+  }
+
+  const parsed = clientBookAppointmentSchema.safeParse({
+    clientId: formData.get("clientId"),
+    startTimeLocal: formData.get("startTimeLocal"),
+  });
+
+  if (!parsed.success) {
+    return actionError(parsed.error.issues[0]?.message ?? "Invalid input.");
+  }
+
+  const start = parseDateTimeLocal(parsed.data.startTimeLocal);
+  if (!start || !isSlotAligned(start)) {
+    return actionError("Select a valid available time slot.");
+  }
+
+  if (start.getTime() <= Date.now()) {
+    return actionError("Appointments cannot be scheduled in the past.");
+  }
+
+  const { supabase, profile } = auth.ctx;
+
+  const { data: clientRow, error: clientError } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", parsed.data.clientId)
+    .eq("user_id", profile.id)
+    .is("archived_at", null)
+    .maybeSingle();
+
+  if (clientError) {
+    return actionError(mapAppointmentError(clientError.message));
+  }
+
+  if (!clientRow) {
+    return actionError("You are not linked to that business.");
+  }
+
+  const { data: business, error: businessError } = await supabase
+    .from("businesses")
+    .select("*")
+    .eq("id", clientRow.business_id)
+    .maybeSingle();
+
+  if (businessError) {
+    return actionError(mapAppointmentError(businessError.message));
+  }
+
+  if (!business) {
+    return actionError("Business not found.");
+  }
+
+  const durationMinutes = business.default_appointment_duration_minutes;
+  const startTimeIso = start.toISOString();
+  const endTimeIso = computeEndTimeIso(startTimeIso, durationMinutes);
+
+  const { data: availability, error: availabilityError } = await supabase
+    .from("business_availability")
+    .select("day_of_week, start_time, end_time")
+    .eq("business_id", business.id);
+
+  if (availabilityError) {
+    return actionError(mapAppointmentError(availabilityError.message));
+  }
+
+  const dayStart = new Date(start);
+  dayStart.setHours(0, 0, 0, 0);
+
+  const { data: blocking, error: blockingError } = await supabase
+    .from("appointments")
+    .select("start_time, end_time")
+    .eq("business_id", business.id)
+    .in("status", ["pending", "scheduled"])
+    .lt("start_time", new Date(dayStart.getTime() + 86_400_000).toISOString())
+    .gt("end_time", dayStart.toISOString());
+
+  if (blockingError) {
+    return actionError(mapAppointmentError(blockingError.message));
+  }
+
+  const available = generateAvailableSlots({
+    dateLocal: dayStart,
+    durationMinutes,
+    availability: availability ?? [],
+    blocking: blocking ?? [],
+  });
+
+  if (!available.includes(parsed.data.startTimeLocal)) {
+    return actionError(
+      "That time is no longer available. Please choose another slot.",
+    );
+  }
+
+  try {
+    const overlaps = await hasBlockingAppointmentOverlap(
+      supabase,
+      business.id,
+      startTimeIso,
+      endTimeIso,
+    );
+    if (overlaps) {
+      return actionError(
+        "That time is no longer available. Please choose another slot.",
+      );
+    }
+  } catch (error) {
+    return actionError(
+      mapAppointmentError(
+        error instanceof Error ? error.message : "Unknown error",
+      ),
+    );
+  }
+
+  const appointmentId = crypto.randomUUID();
+  const { error } = await supabase.from("appointments").insert({
+    id: appointmentId,
+    business_id: business.id,
+    client_id: clientRow.id,
+    start_time: startTimeIso,
+    end_time: endTimeIso,
+    status: "pending",
+    notes: null,
+  });
+
+  if (error) {
+    return actionError(mapAppointmentError(error.message));
+  }
+
+  revalidatePath("/appointments");
+  revalidatePath("/calendar");
+  redirect("/appointments");
+}
+
+export async function cancelClientAppointmentAction(
+  _prevState: AppointmentFormState,
+  formData: FormData,
+): Promise<AppointmentFormState> {
+  const auth = await requireClientContext();
+  if (!auth.ok) {
+    return actionError(auth.error);
+  }
+
+  const idResult = appointmentIdSchema.safeParse(formData.get("appointmentId"));
+  if (!idResult.success) {
+    return actionError("Invalid appointment.");
+  }
+
+  const { supabase } = auth.ctx;
+
+  const { data: appointment, error: loadError } = await supabase
+    .from("appointments")
+    .select("*")
+    .eq("id", idResult.data)
+    .maybeSingle();
+
+  if (loadError) {
+    return actionError(mapAppointmentError(loadError.message));
+  }
+
+  if (!appointment) {
+    return actionError("Appointment not found.");
+  }
+
+  if (
+    appointment.status !== "pending" &&
+    appointment.status !== "scheduled"
+  ) {
+    return actionError("This appointment can no longer be cancelled.");
+  }
+
+  if (new Date(appointment.start_time).getTime() <= Date.now()) {
+    return actionError("Past appointments cannot be cancelled.");
+  }
+
+  const { error } = await supabase
+    .from("appointments")
+    .update({ status: "cancelled" })
+    .eq("id", appointment.id);
+
+  if (error) {
+    return actionError(mapAppointmentError(error.message));
+  }
+
+  revalidatePath("/appointments");
+  revalidatePath("/calendar");
+  revalidatePath(`/calendar/${appointment.id}`);
+
+  return { success: true, data: { message: "Appointment cancelled." } };
 }

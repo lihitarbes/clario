@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogoutButton } from "@/components/auth/LogoutButton";
+import { NotificationBell } from "@/components/layout/NotificationBell";
+import { UserMenu } from "@/components/layout/UserMenu";
 import { cn } from "@/lib/utils";
+import type { NotificationWithAppointment } from "@/lib/notifications/queries";
+import type { Profile } from "@/types/database";
 
 const navItems = [
   { href: "/home", label: "Home" },
@@ -14,7 +17,17 @@ const navItems = [
   { href: "/profile", label: "Profile" },
 ] as const;
 
-export function ClientNav() {
+type ClientNavProps = {
+  profile: Pick<Profile, "full_name" | "role">;
+  notifications: NotificationWithAppointment[];
+  unreadCount: number;
+};
+
+export function ClientNav({
+  profile,
+  notifications,
+  unreadCount,
+}: ClientNavProps) {
   const currentPath = usePathname();
 
   return (
@@ -46,7 +59,11 @@ export function ClientNav() {
               );
             })}
           </nav>
-          <LogoutButton />
+          <NotificationBell
+            notifications={notifications}
+            unreadCount={unreadCount}
+          />
+          <UserMenu profile={profile} />
         </div>
       </div>
     </header>

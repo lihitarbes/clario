@@ -4,6 +4,9 @@ import { timeRangesOverlap } from "@/lib/appointments/time";
 
 type AppSupabaseClient = SupabaseClient<Database>;
 
+/** Statuses that reserve a calendar slot. */
+export const BLOCKING_APPOINTMENT_STATUSES = ["pending", "scheduled"] as const;
+
 /** Returns true if a new availability range overlaps existing ranges on the same day. */
 export function availabilityRangesOverlap(
   existing: Pick<BusinessAvailability, "id" | "day_of_week" | "start_time" | "end_time">[],
@@ -23,8 +26,11 @@ export function availabilityRangesOverlap(
   });
 }
 
-/** Server-side check for overlapping scheduled appointments in the same business. */
-export async function hasScheduledAppointmentOverlap(
+/**
+ * Server-side check for overlapping pending/scheduled appointments
+ * in the same business.
+ */
+export async function hasBlockingAppointmentOverlap(
   supabase: AppSupabaseClient,
   businessId: string,
   startTimeIso: string,
@@ -35,7 +41,7 @@ export async function hasScheduledAppointmentOverlap(
     .from("appointments")
     .select("id")
     .eq("business_id", businessId)
-    .eq("status", "scheduled")
+    .in("status", [...BLOCKING_APPOINTMENT_STATUSES])
     .lt("start_time", endTimeIso)
     .gt("end_time", startTimeIso);
 
@@ -51,3 +57,6 @@ export async function hasScheduledAppointmentOverlap(
 
   return (data?.length ?? 0) > 0;
 }
+
+/** @deprecated Use hasBlockingAppointmentOverlap — kept as alias during M5. */
+export const hasScheduledAppointmentOverlap = hasBlockingAppointmentOverlap;

@@ -1,9 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getHomePathForRole } from "@/lib/auth/routing";
 import {
   isAuthRoute,
   isProtectedRoute,
 } from "@/lib/routes";
+import type { UserRole } from "@/types/database";
 
 /**
  * Refreshes the Supabase session and applies optimistic route redirects.
@@ -50,8 +52,15 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && isAuthRoute(pathname)) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const role = profile?.role as UserRole | undefined;
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/";
+    redirectUrl.pathname = role ? getHomePathForRole(role) : "/";
     redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
   }
