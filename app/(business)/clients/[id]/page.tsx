@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArchiveClientButton } from "@/components/clients/ArchiveClientButton";
 import { ClientForm } from "@/components/clients/ClientForm";
+import { VisitHistorySection } from "@/components/visits/VisitHistorySection";
 import {
   Card,
   CardContent,
@@ -45,6 +46,14 @@ export default async function ClientDetailPage({
 
   const isArchived = Boolean(client.archived_at);
 
+  const { data: visits } = await supabase
+    .from("visits")
+    .select(
+      "id, summary, published_at, publication_scope, appointments(start_time, end_time, status)",
+    )
+    .eq("client_id", client.id)
+    .order("created_at", { ascending: false });
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -75,7 +84,15 @@ export default async function ClientDetailPage({
         </div>
       </div>
 
-      {isArchived ? (
+      {!isArchived ? (
+        <>
+          <ClientForm mode="edit" client={client} />
+          <ArchiveClientButton
+            clientId={client.id}
+            clientName={client.full_name}
+          />
+        </>
+      ) : (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Client details</CardTitle>
@@ -107,15 +124,9 @@ export default async function ClientDetailPage({
             </div>
           </CardContent>
         </Card>
-      ) : (
-        <>
-          <ClientForm mode="edit" client={client} />
-          <ArchiveClientButton
-            clientId={client.id}
-            clientName={client.full_name}
-          />
-        </>
       )}
+
+      <VisitHistorySection visits={visits ?? []} />
     </div>
   );
 }

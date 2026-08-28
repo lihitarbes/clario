@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AppointmentForm } from "@/components/appointments/AppointmentForm";
 import { AppointmentStatusActions } from "@/components/appointments/AppointmentStatusActions";
 import { PendingAppointmentActions } from "@/components/appointments/PendingAppointmentActions";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -48,6 +49,15 @@ export default async function AppointmentDetailPage({
     typedAppointment.clients?.full_name ?? "Unknown client";
   const isScheduled = typedAppointment.status === "scheduled";
   const isPending = typedAppointment.status === "pending";
+  const isCompleted = typedAppointment.status === "completed";
+
+  const { data: visit } = isCompleted
+    ? await supabase
+        .from("visits")
+        .select("id")
+        .eq("appointment_id", typedAppointment.id)
+        .maybeSingle()
+    : { data: null };
 
   const { data: clients } = isScheduled
     ? await supabase
@@ -119,42 +129,65 @@ export default async function AppointmentDetailPage({
       ) : null}
 
       {isScheduled ? (
-        <>
-          <AppointmentForm
-            mode="edit"
-            clients={clients ?? []}
-            defaultDurationMinutes={
-              business.default_appointment_duration_minutes
-            }
-            appointment={typedAppointment}
-          />
-          <AppointmentStatusActions appointmentId={typedAppointment.id} />
-        </>
+        <AppointmentForm
+          mode="edit"
+          clients={clients ?? []}
+          defaultDurationMinutes={
+            business.default_appointment_duration_minutes
+          }
+          appointment={typedAppointment}
+        />
       ) : null}
 
+      <AppointmentStatusActions
+        appointmentId={typedAppointment.id}
+        isScheduled={isScheduled}
+      />
+
       {!isPending && !isScheduled ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Appointment details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div>
-              <p className="font-medium text-zinc-900">Client</p>
-              <p className="text-zinc-600">{clientName}</p>
-              {typedAppointment.clients?.email ? (
-                <p className="text-zinc-500">{typedAppointment.clients.email}</p>
-              ) : null}
-            </div>
-            {typedAppointment.notes ? (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Appointment details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
               <div>
-                <p className="font-medium text-zinc-900">Notes</p>
-                <p className="whitespace-pre-wrap text-zinc-600">
-                  {typedAppointment.notes}
-                </p>
+                <p className="font-medium text-zinc-900">Client</p>
+                <p className="text-zinc-600">{clientName}</p>
+                {typedAppointment.clients?.email ? (
+                  <p className="text-zinc-500">{typedAppointment.clients.email}</p>
+                ) : null}
               </div>
-            ) : null}
-          </CardContent>
-        </Card>
+              {typedAppointment.notes ? (
+                <div>
+                  <p className="font-medium text-zinc-900">Notes</p>
+                  <p className="whitespace-pre-wrap text-zinc-600">
+                    {typedAppointment.notes}
+                  </p>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          {isCompleted && visit ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Visit record</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-zinc-600">
+                  This appointment has a completed visit record with summary,
+                  follow-up, and recommendations.
+                </p>
+                <Button asChild className="mt-3">
+                  <Link href={`/calendar/visits/${visit.id}`}>
+                    View visit record
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

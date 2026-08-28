@@ -22,11 +22,20 @@ export type FormAssignmentStatus = "pending" | "completed";
 
 export type PurchaseStatus = "pending" | "confirmed" | "cancelled";
 
+export type VisitPublicationScope = "full" | "recommendations_only";
+
 export type NotificationType =
   | "appointment_request"
   | "appointment_cancelled_by_client"
   | "appointment_approved"
   | "appointment_declined";
+
+export type RecommendationCategory =
+  | "product"
+  | "medication"
+  | "device"
+  | "treatment"
+  | "other";
 
 /** JSON array stored on forms.fields */
 export type FormFieldDefinition = {
@@ -102,6 +111,19 @@ export type Visit = {
   summary: string | null;
   professional_notes: string | null;
   follow_up: string | null;
+  published_at: string | null;
+  publication_scope: VisitPublicationScope;
+  created_at: string;
+};
+
+/** Client-safe visit row from public.client_visits (no professional_notes). */
+export type ClientVisit = {
+  id: string;
+  appointment_id: string;
+  client_id: string;
+  summary: string | null;
+  follow_up: string | null;
+  publication_scope: VisitPublicationScope;
   created_at: string;
 };
 
@@ -142,12 +164,14 @@ export type Product = {
   created_at: string;
 };
 
-export type ProductRecommendation = {
+export type VisitRecommendation = {
   id: string;
   visit_id: string;
   client_id: string;
-  product_id: string;
-  notes: string | null;
+  category: RecommendationCategory;
+  title: string;
+  instructions: string | null;
+  product_id: string | null;
   created_at: string;
 };
 
@@ -201,6 +225,11 @@ export function buildDocumentStoragePath(params: {
 }): string {
   return `${params.businessId}/${params.clientId}/${params.documentId}/${params.fileName}`;
 }
+
+/** RPC from migration 20260829130000 — complete scheduled appointment + create draft visit. */
+export type CompleteAppointmentWithVisitArgs = {
+  p_appointment_id: string;
+};
 
 export type Database = {
   public: {
@@ -311,12 +340,16 @@ export type Database = {
           summary?: string | null;
           professional_notes?: string | null;
           follow_up?: string | null;
+          published_at?: string | null;
+          publication_scope?: VisitPublicationScope;
           created_at?: string;
         };
         Update: {
           summary?: string | null;
           professional_notes?: string | null;
           follow_up?: string | null;
+          published_at?: string | null;
+          publication_scope?: VisitPublicationScope;
         };
         Relationships: [];
       };
@@ -387,18 +420,23 @@ export type Database = {
         };
         Relationships: [];
       };
-      product_recommendations: {
-        Row: ProductRecommendation;
+      visit_recommendations: {
+        Row: VisitRecommendation;
         Insert: {
           id?: string;
           visit_id: string;
           client_id: string;
-          product_id: string;
-          notes?: string | null;
+          category: RecommendationCategory;
+          title: string;
+          instructions?: string | null;
+          product_id?: string | null;
           created_at?: string;
         };
         Update: {
-          notes?: string | null;
+          category?: RecommendationCategory;
+          title?: string;
+          instructions?: string | null;
+          product_id?: string | null;
         };
         Relationships: [];
       };
@@ -474,7 +512,12 @@ export type Database = {
         Relationships: [];
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      client_visits: {
+        Row: ClientVisit;
+        Relationships: [];
+      };
+    };
     Functions: Record<string, never>;
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

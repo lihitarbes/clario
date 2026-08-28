@@ -38,7 +38,8 @@ function intervalsOverlapMs(
  * for a single local calendar day.
  *
  * A start is included only when the full duration fits inside an availability
- * range and does not overlap any blocking (pending/scheduled) appointment.
+ * range and does not overlap any blocking appointment
+ * (pending, scheduled, or completed).
  */
 export function generateAvailableSlots({
   dateLocal,

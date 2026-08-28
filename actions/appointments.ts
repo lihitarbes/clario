@@ -3,9 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { mapAppointmentError } from "@/lib/auth/appointment-errors";
+import { mapCompleteAppointmentRpcError } from "@/lib/appointments/complete-rpc-errors";
 import { requireBusinessOwnerContext } from "@/lib/auth/require-business-owner";
 import { requireClientContext } from "@/lib/auth/require-client";
-import { hasBlockingAppointmentOverlap } from "@/lib/appointments/overlap";
+import {
+  BLOCKING_APPOINTMENT_STATUSES,
+  hasBlockingAppointmentOverlap,
+} from "@/lib/appointments/overlap";
 import { generateAvailableSlots } from "@/lib/appointments/slots";
 import {
   isSlotAligned,
@@ -16,10 +20,13 @@ import {
   appointmentIdSchema,
   clientBookAppointmentSchema,
 } from "@/lib/validation/appointments";
-import { actionError, type ActionResult } from "@/types/actions";
+import { revalidateVisitPaths } from "@/lib/visits/revalidate";
+import { actionError, actionSuccess, type ActionResult } from "@/types/actions";
 import type { Appointment, Business, Client } from "@/types/database";
 
-type AppointmentFormState = ActionResult<{ message?: string }> | null;
+type AppointmentFormState =
+  | ActionResult<{ message?: string; visitId?: string }>
+  | null;
 
 export type AppointmentWithClient = Appointment & {
   clients: Pick<Client, "full_name" | "email"> | null;
@@ -98,7 +105,7 @@ function parseStartTimeFromForm(startTimeLocal: string) {
 }
 
 const OVERLAP_MESSAGE =
-  "This time overlaps another pending or scheduled appointment.";
+  "This time overlaps another appointment on your calendar.";
 
 export async function createAppointmentAction(
   _prevState: AppointmentFormState,
@@ -298,31 +305,45 @@ export async function completeAppointmentAction(
     return actionError("Invalid appointment.");
   }
 
-  const lookup = await getAppointmentForOwner(idResult.data);
-  if (!lookup.ok) {
-    return actionError(lookup.error);
+  const auth = await requireBusinessOwnerContext();
+  if (!auth.ok) {
+    return actionError(auth.error);
   }
 
-  if (lookup.appointment.status !== "scheduled") {
-    return actionError("Only scheduled appointments can be completed.");
-  }
-
-  const { supabase, business } = lookup.ctx;
-  const { error } = await supabase
-    .from("appointments")
-    .update({ status: "completed" })
-    .eq("id", lookup.appointment.id)
-    .eq("business_id", business.id);
+  const { supabase } = auth.ctx;
+  const { data: visitIdRaw, error } = await supabase.rpc(
+    "complete_appointment_with_visit",
+    { p_appointment_id: idResult.data } as never,
+  );
+  const visitId = visitIdRaw as string | null;
 
   if (error) {
-    return actionError(mapAppointmentError(error.message));
+    return actionError(mapCompleteAppointmentRpcError(error));
+  }
+
+  if (!visitId || typeof visitId !== "string") {
+    return actionError("Unable to complete appointment.");
   }
 
   revalidatePath("/calendar");
-  revalidatePath(`/calendar/${lookup.appointment.id}`);
+  revalidatePath(`/calendar/${idResult.data}`);
   revalidatePath("/appointments");
+  revalidateVisitPaths(visitId, idResult.data);
 
-  return { success: true, data: { message: "Appointment marked completed." } };
+  const { data: appointment } = await supabase
+    .from("appointments")
+    .select("client_id")
+    .eq("id", idResult.data)
+    .maybeSingle();
+
+  if (appointment?.client_id) {
+    revalidatePath(`/clients/${appointment.client_id}`);
+  }
+
+  return actionSuccess({
+    visitId,
+    message: "Appointment completed.",
+  });
 }
 
 export async function approveAppointmentAction(
@@ -497,7 +518,7 @@ export async function bookAppointmentAction(
     .from("appointments")
     .select("start_time, end_time")
     .eq("business_id", business.id)
-    .in("status", ["pending", "scheduled"])
+    .in("status", [...BLOCKING_APPOINTMENT_STATUSES])
     .lt("start_time", new Date(dayStart.getTime() + 86_400_000).toISOString())
     .gt("end_time", dayStart.toISOString());
 

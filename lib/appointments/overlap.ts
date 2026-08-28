@@ -4,8 +4,12 @@ import { timeRangesOverlap } from "@/lib/appointments/time";
 
 type AppSupabaseClient = SupabaseClient<Database>;
 
-/** Statuses that reserve a calendar slot. */
-export const BLOCKING_APPOINTMENT_STATUSES = ["pending", "scheduled"] as const;
+/** Statuses that reserve a calendar slot (business-wide). */
+export const BLOCKING_APPOINTMENT_STATUSES = [
+  "pending",
+  "scheduled",
+  "completed",
+] as const;
 
 /** Returns true if a new availability range overlaps existing ranges on the same day. */
 export function availabilityRangesOverlap(
@@ -27,8 +31,8 @@ export function availabilityRangesOverlap(
 }
 
 /**
- * Server-side check for overlapping pending/scheduled appointments
- * in the same business.
+ * Server-side check for overlapping blocking appointments
+ * (pending, scheduled, completed) in the same business.
  */
 export async function hasBlockingAppointmentOverlap(
   supabase: AppSupabaseClient,

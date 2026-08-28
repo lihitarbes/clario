@@ -355,4 +355,50 @@ The original PDF is not modified. When the course documentation is updated later
 
 ---
 
+## Milestone 6 — professional visit records
+
+### Database — `client_visits` view and `visit_recommendations`
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Hardened visit RLS (clients cannot SELECT `public.visits`). Added security-definer `client_visits` view projecting only client-safe columns (`summary`, `follow_up`; no `professional_notes`). Renamed `product_recommendations` → `visit_recommendations` with `category`, `title`, `instructions`, optional `product_id`. Migration `20260829120000_visits_m6_client_view_and_visit_recommendations.sql`. |
+| **Why** | Visit records are a core clinical/professional artifact; clients need read-only access without exposing private owner notes. |
+| **Required or recommended** | **Required** (approved product decision) |
+| **Original doc section** | Product Specification §5–7 (Visits, Recommendations) |
+
+---
+
+### Milestone 6 implementation notes
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Completing a scheduled appointment atomically creates exactly one draft visit via `complete_appointment_with_visit` RPC (idempotent retry-safe). Post-completion modal offers “Fill visit now” or “I'll do it later” — no auto-redirect. Owner visit page: draft/published state, publish/unpublish, summary, follow-up, private professional notes, recommendation CRUD. Client `/visits` and `/visits/[visitId]` query `client_visits` only (published visits only; never `visits` or `professional_notes`). Visit history on owner client profile and “View visit record” on completed appointment detail. |
+| **Why** | Milestone 6 application layer after approved database migration. |
+| **Required or recommended** | **Required** (implementation plan) |
+| **Original doc section** | Product Specification §5–7 |
+
+---
+
+### Milestone 6 refinement — draft visits, publication, atomic completion
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | `visits.published_at` (NULL = draft, non-NULL = published to client). Existing visits remain draft. `client_visits` returns only published visits; recommendation client SELECT requires published visit. Atomic `complete_appointment_with_visit` RPC completes appointment and creates visit in one transaction. Completion modal replaces auto-redirect. Owner publish/unpublish actions on visit page. Migration `20260829130000_visit_published_at_and_complete_rpc.sql`. |
+| **Why** | Separate appointment completion from client publication; prevent partial completion failures; explicit owner control before clients see visit content. |
+| **Required or recommended** | **Required** (approved refinement) |
+| **Original doc section** | Product Specification §5–7 (Visits) |
+
+---
+
+### Milestone 6 refinement — publication scope
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | `visits.publication_scope` (`full` vs `recommendations_only`) with `published_at`. Owner chooses sharing mode on publish; can change mode or unpublish. `client_visits` masks `summary`/`follow_up` when scope is recommendations-only; exposes scope for client UI logic. Already-published visits backfilled as `full`. Migration `20260829140000_visit_publication_scope.sql`. |
+| **Why** | Owner controls whether clients see full visit notes or recommendations only. |
+| **Required or recommended** | **Required** (approved refinement) |
+| **Original doc section** | Product Specification §5–7 (Visits) |
+
+---
+
 *New entries will be appended as milestones are completed and as additional design-level changes are approved.*
