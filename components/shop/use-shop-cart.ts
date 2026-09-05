@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import {
   addToCartLine,
   emptyShopCartStore,
@@ -12,18 +12,69 @@ import {
   type ShopCartStore,
 } from "@/lib/shop/cart-storage";
 
-export function useShopCart() {
-  const [store, setStore] = useState<ShopCartStore>(emptyShopCartStore);
-  const [ready, setReady] = useState(false);
+const SERVER_SNAPSHOT = emptyShopCartStore();
+let clientSnapshot: ShopCartStore = SERVER_SNAPSHOT;
+let hasClientSnapshot = false;
+const listeners = new Set<() => void>();
 
-  useEffect(() => {
-    setStore(readShopCartStore());
-    setReady(true);
-  }, []);
+function emitChange() {
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
+function subscribe(onStoreChange: () => void) {
+  listeners.add(onStoreChange);
+  return () => {
+    listeners.delete(onStoreChange);
+  };
+}
+
+function getClientSnapshot(): ShopCartStore {
+  if (!hasClientSnapshot) {
+    clientSnapshot = readShopCartStore();
+    hasClientSnapshot = true;
+  }
+  return clientSnapshot;
+}
+
+function getServerSnapshot(): ShopCartStore {
+  return SERVER_SNAPSHOT;
+}
+
+function persistStore(next: ShopCartStore) {
+  clientSnapshot = next;
+  hasClientSnapshot = true;
+  writeShopCartStore(next);
+  emitChange();
+}
+
+function subscribeIsClient() {
+  return () => {};
+}
+
+function getIsClientSnapshot() {
+  return true;
+}
+
+function getIsClientServerSnapshot() {
+  return false;
+}
+
+export function useShopCart() {
+  const store = useSyncExternalStore(
+    subscribe,
+    getClientSnapshot,
+    getServerSnapshot,
+  );
+  const ready = useSyncExternalStore(
+    subscribeIsClient,
+    getIsClientSnapshot,
+    getIsClientServerSnapshot,
+  );
 
   const persist = useCallback((next: ShopCartStore) => {
-    setStore(next);
-    writeShopCartStore(next);
+    persistStore(next);
   }, []);
 
   const linesFor = useCallback(

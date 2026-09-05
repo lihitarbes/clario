@@ -79,8 +79,11 @@ function useCloseOnSuccess(
   onSuccess: () => void,
 ) {
   const onSuccessRef = useRef(onSuccess);
-  onSuccessRef.current = onSuccess;
   const router = useRouter();
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
 
   useEffect(() => {
     if (state?.success) {

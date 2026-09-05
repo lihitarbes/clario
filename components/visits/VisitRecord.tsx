@@ -69,7 +69,10 @@ function VisitEditForm({
 }) {
   const [state, formAction, pending] = useActionState(updateVisitAction, null);
   const onSavedRef = useRef(onSaved);
-  onSavedRef.current = onSaved;
+
+  useEffect(() => {
+    onSavedRef.current = onSaved;
+  }, [onSaved]);
 
   useEffect(() => {
     if (state?.success) {

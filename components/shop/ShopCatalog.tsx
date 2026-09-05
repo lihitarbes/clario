@@ -155,33 +155,46 @@ export function ShopCatalog({
   );
   const [addedNotice, setAddedNotice] = useState<string | null>(null);
   const cart = useShopCart();
+  const { ready: cartReady, clearAll: clearCart } = cart;
 
-  useEffect(() => {
+  // Adjust drawer / highlight state when deep-link props change (no effect setState).
+  const [ordersFocusKey, setOrdersFocusKey] = useState(
+    () => `${openOrdersInitially}:${focusPurchaseId ?? ""}`,
+  );
+  const nextOrdersFocusKey = `${openOrdersInitially}:${focusPurchaseId ?? ""}`;
+  if (nextOrdersFocusKey !== ordersFocusKey) {
+    setOrdersFocusKey(nextOrdersFocusKey);
     if (openOrdersInitially || focusPurchaseId) {
       setCartOpen(false);
       setOrdersOpen(true);
     }
-  }, [openOrdersInitially, focusPurchaseId]);
+  }
+
+  const [productFocusId, setProductFocusId] = useState(focusProductId);
+  if (focusProductId !== productFocusId) {
+    setProductFocusId(focusProductId);
+    if (focusProductId) {
+      const match = groups.find((group) =>
+        group.products.some((product) => product.id === focusProductId),
+      );
+      if (match) {
+        setSelectedBusinessId(match.businessId);
+        setHighlightedId(focusProductId);
+      }
+    }
+  }
 
   useEffect(() => {
-    if (!showOrderedMessage || !cart.ready) {
+    if (!showOrderedMessage || !cartReady) {
       return;
     }
-    cart.clearAll();
-  }, [showOrderedMessage, cart.ready, cart.clearAll]);
+    clearCart();
+  }, [showOrderedMessage, cartReady, clearCart]);
 
   useEffect(() => {
     if (!focusProductId) {
       return;
     }
-    const match = groups.find((group) =>
-      group.products.some((product) => product.id === focusProductId),
-    );
-    if (!match) {
-      return;
-    }
-    setSelectedBusinessId(match.businessId);
-    setHighlightedId(focusProductId);
     const frame = window.requestAnimationFrame(() => {
       document
         .getElementById(`shop-product-${focusProductId}`)
