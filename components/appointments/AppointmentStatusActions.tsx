@@ -6,6 +6,7 @@ import {
   cancelAppointmentAction,
   completeAppointmentAction,
 } from "@/actions/appointments";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -94,7 +95,11 @@ export function AppointmentStatusActions({
             <form action={completeAction} onSubmit={handleComplete}>
               <input type="hidden" name="appointmentId" value={appointmentId} />
               <Button type="submit" disabled={completePending || cancelPending}>
-                {completePending ? "Completing…" : "Mark completed"}
+                <ActionPendingLabel
+                  pending={completePending}
+                  pendingLabel="Completing…"
+                  idleLabel="Mark completed"
+                />
               </Button>
             </form>
 
@@ -105,7 +110,11 @@ export function AppointmentStatusActions({
                 variant="outline"
                 disabled={completePending || cancelPending}
               >
-                {cancelPending ? "Cancelling…" : "Cancel appointment"}
+                <ActionPendingLabel
+                  pending={cancelPending}
+                  pendingLabel="Cancelling…"
+                  idleLabel="Cancel appointment"
+                />
               </Button>
             </form>
 

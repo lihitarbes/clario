@@ -1,12 +1,14 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   createRecommendationAction,
   deleteRecommendationAction,
   updateRecommendationAction,
 } from "@/actions/recommendations";
 import type { VisitRecommendationWithProduct } from "@/actions/visits";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -29,7 +31,7 @@ import {
 import type { Product } from "@/types/database";
 import { cn } from "@/lib/utils";
 
-type ProductOption = Pick<Product, "id" | "name">;
+type ProductOption = Pick<Product, "id" | "name" | "is_active">;
 
 type RecommendationRowProps = {
   recommendation: VisitRecommendationWithProduct;
@@ -123,10 +125,12 @@ export function RecommendationRow({
                 defaultValue={recommendation.product_id ?? ""}
                 className={visitFormSelectClassName}
               >
-                <option value="">None</option>
+                <option value="">No linked product</option>
                 {products.map((product) => (
                   <option key={product.id} value={product.id}>
-                    {product.name}
+                    {product.is_active
+                      ? product.name
+                      : `${product.name} (inactive)`}
                   </option>
                 ))}
               </select>
@@ -134,7 +138,11 @@ export function RecommendationRow({
 
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={updatePending || deletePending}>
-                {updatePending ? "Saving…" : "Save changes"}
+                <ActionPendingLabel
+                  pending={updatePending}
+                  pendingLabel="Saving…"
+                  idleLabel="Save changes"
+                />
               </Button>
               <Button
                 type="button"
@@ -180,6 +188,9 @@ export function RecommendationRow({
           {recommendation.products ? (
             <p className="text-sm text-zinc-500">
               Product: {recommendation.products.name}
+              {recommendation.products.is_active === false
+                ? " (inactive)"
+                : null}
             </p>
           ) : null}
         </div>
@@ -206,7 +217,11 @@ export function RecommendationRow({
               size="sm"
               disabled={deletePending}
             >
-              {deletePending ? "Removing…" : "Delete"}
+              <ActionPendingLabel
+                pending={deletePending}
+                pendingLabel="Removing…"
+                idleLabel="Delete"
+              />
             </Button>
           </form>
         </div>
@@ -222,16 +237,30 @@ export function RecommendationRow({
 type AddRecommendationFormProps = {
   visitId: string;
   products: ProductOption[];
+  onCancel?: () => void;
+  onSuccess?: () => void;
 };
 
 export function AddRecommendationForm({
   visitId,
   products,
+  onCancel,
+  onSuccess,
 }: AddRecommendationFormProps) {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(
     createRecommendationAction,
     null,
   );
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
+
+  useEffect(() => {
+    if (state?.success) {
+      onSuccessRef.current?.();
+      router.refresh();
+    }
+  }, [state, router]);
 
   return (
     <Card>
@@ -280,32 +309,46 @@ export function AddRecommendationForm({
               defaultValue=""
               className={visitFormSelectClassName}
             >
-              <option value="">None</option>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
+              <option value="">No linked product</option>
+              {products
+                .filter((product) => product.is_active)
+                .map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}
+                  </option>
+                ))}
             </select>
-            {products.length === 0 ? (
+            {products.filter((product) => product.is_active).length === 0 ? (
               <p className="text-xs text-zinc-500">
-                No catalog products yet — you can still add recommendations
-                without linking a product.
+                No active catalog products yet — you can still add
+                recommendations without linking a product.
               </p>
             ) : null}
           </div>
 
-          <Button type="submit" disabled={pending}>
-            {pending ? "Adding…" : "Add recommendation"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={pending}>
+              <ActionPendingLabel
+                pending={pending}
+                pendingLabel="Adding…"
+                idleLabel="Add"
+              />
+            </Button>
+            {onCancel ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={onCancel}
+              >
+                Cancel
+              </Button>
+            ) : null}
+          </div>
 
           {state && !state.success ? (
-            <p className="text-sm text-red-600" role="alert">{state.error}</p>
-          ) : null}
-
-          {state?.success && state.data?.message ? (
-            <p className="text-sm text-green-700" role="status">
-              {state.data.message}
+            <p className="text-sm text-red-600" role="alert">
+              {state.error}
             </p>
           ) : null}
         </form>
@@ -325,13 +368,27 @@ export function RecommendationsSection({
   recommendations,
   products,
 }: RecommendationsSectionProps) {
+  const [addOpen, setAddOpen] = useState(false);
+
   return (
     <section className="space-y-4">
-      <div>
-        <h2 className="text-lg font-medium text-zinc-900">Recommendations</h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          Client-visible care and product recommendations for this visit.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-medium text-zinc-900">Recommendations</h2>
+          <p className="mt-1 text-sm text-zinc-600">
+            Client-visible care and product recommendations for this visit.
+          </p>
+        </div>
+        {!addOpen ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAddOpen(true)}
+          >
+            + Add recommendation
+          </Button>
+        ) : null}
       </div>
 
       {recommendations.length > 0 ? (
@@ -346,12 +403,17 @@ export function RecommendationsSection({
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-zinc-600">
-          No recommendations yet. Add one below.
-        </p>
+        <p className="text-sm text-zinc-600">No recommendations yet.</p>
       )}
 
-      <AddRecommendationForm visitId={visitId} products={products} />
+      {addOpen ? (
+        <AddRecommendationForm
+          visitId={visitId}
+          products={products}
+          onCancel={() => setAddOpen(false)}
+          onSuccess={() => setAddOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }

@@ -1,26 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArchiveClientButton } from "@/components/clients/ArchiveClientButton";
-import { ClientForm } from "@/components/clients/ClientForm";
+import { ClientProfile } from "@/components/clients/ClientProfile";
+import { ClientDocumentsEntry } from "@/components/documents/ClientDocumentsEntry";
+import { ClientFormsSection } from "@/components/forms/ClientFormsSection";
 import { VisitHistorySection } from "@/components/visits/VisitHistorySection";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { getOwnedBusiness } from "@/lib/auth/permissions";
+import type { FormHistoryAssignment } from "@/lib/forms/history";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
 
 export default async function ClientDetailPage({
   params,
@@ -46,13 +35,53 @@ export default async function ClientDetailPage({
 
   const isArchived = Boolean(client.archived_at);
 
-  const { data: visits } = await supabase
-    .from("visits")
-    .select(
-      "id, summary, published_at, publication_scope, appointments(start_time, end_time, status)",
-    )
-    .eq("client_id", client.id)
-    .order("created_at", { ascending: false });
+  const [
+    visitsResult,
+    activeFormsResult,
+    formAssignmentsResult,
+    documentsCountResult,
+  ] = await Promise.all([
+    supabase
+      .from("visits")
+      .select(
+        "id, summary, published_at, publication_scope, appointments(start_time, end_time, status)",
+      )
+      .eq("client_id", client.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("forms")
+      .select("id, title")
+      .eq("business_id", business.id)
+      .is("archived_at", null)
+      .order("title"),
+    supabase
+      .from("form_assignments")
+      .select(
+        "id, form_id, client_id, status, assignment_kind, assigned_at, completed_at, forms(title, description, archived_at), form_submissions!form_assignment_id(id, submitted_at, valid_until)",
+      )
+      .eq("client_id", client.id)
+      .order("assigned_at", { ascending: false }),
+    supabase
+      .from("documents")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", client.id),
+  ]);
+
+  const visits = (visitsResult.data ?? []) as Array<{
+    id: string;
+    summary: string | null;
+    published_at: string | null;
+    publication_scope: import("@/types/database").VisitPublicationScope;
+    appointments: {
+      start_time: string;
+      end_time: string;
+      status: string;
+    } | null;
+  }>;
+  const activeForms = activeFormsResult.data ?? [];
+  const formAssignments = formAssignmentsResult.data ?? [];
+  const formAssignmentsError = formAssignmentsResult.error;
+  const documentCount = documentsCountResult.count ?? 0;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -84,49 +113,42 @@ export default async function ClientDetailPage({
         </div>
       </div>
 
+      <ClientProfile client={client} />
+
       {!isArchived ? (
-        <>
-          <ClientForm mode="edit" client={client} />
-          <ArchiveClientButton
-            clientId={client.id}
-            clientName={client.full_name}
-          />
-        </>
+        <ArchiveClientButton
+          clientId={client.id}
+          clientName={client.full_name}
+        />
+      ) : null}
+
+      <ClientDocumentsEntry
+        clientId={client.id}
+        documentCount={documentCount}
+        loadError={
+          documentsCountResult.error
+            ? "Could not load documents. Please try again."
+            : null
+        }
+      />
+
+      {formAssignmentsError ? (
+        <p
+          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          role="alert"
+        >
+          Could not load form history. Please try again.
+        </p>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Client details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div>
-              <p className="font-medium text-zinc-900">Email</p>
-              <p className="text-zinc-600">{client.email}</p>
-            </div>
-            {client.phone ? (
-              <div>
-                <p className="font-medium text-zinc-900">Phone</p>
-                <p className="text-zinc-600">{client.phone}</p>
-              </div>
-            ) : null}
-            {client.notes ? (
-              <div>
-                <p className="font-medium text-zinc-900">Notes</p>
-                <p className="whitespace-pre-wrap text-zinc-600">
-                  {client.notes}
-                </p>
-              </div>
-            ) : null}
-            <div>
-              <p className="font-medium text-zinc-900">Archived on</p>
-              <p className="text-zinc-600">
-                {client.archived_at ? formatDate(client.archived_at) : "—"}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <ClientFormsSection
+          clientId={client.id}
+          assignments={formAssignments as FormHistoryAssignment[]}
+          forms={activeForms}
+          canAssign={!isArchived}
+        />
       )}
 
-      <VisitHistorySection visits={visits ?? []} />
+      <VisitHistorySection visits={visits} />
     </div>
   );
 }

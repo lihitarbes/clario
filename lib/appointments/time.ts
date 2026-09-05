@@ -76,6 +76,42 @@ export function parseWeekParam(value: string | undefined): Date | null {
   return parsed;
 }
 
+/** Resolve `?week=` from Next.js searchParams (string | string[] | undefined). */
+export function resolveWeekSearchParam(
+  week: string | string[] | undefined,
+): string | undefined {
+  if (typeof week === "string") {
+    return week;
+  }
+  if (Array.isArray(week) && typeof week[0] === "string") {
+    return week[0];
+  }
+  return undefined;
+}
+
+/** Shift a week-start date by a whole number of weeks (negative = earlier). */
+export function shiftWeekStart(weekStart: Date, weekDelta: number): Date {
+  const next = new Date(weekStart);
+  next.setDate(next.getDate() + weekDelta * 7);
+  return next;
+}
+
+/** Human-readable visible week label, e.g. "Sep 6 – Sep 12, 2026". */
+export function formatWeekRangeLabel(weekStart: Date): string {
+  const end = new Date(weekStart);
+  end.setDate(end.getDate() + 6);
+  const startLabel = weekStart.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const endLabel = end.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${startLabel} – ${endLabel}`;
+}
+
 /** Splits a datetime-local value into date (YYYY-MM-DD) and time (HH:MM). */
 export function splitDateTimeLocal(value: string): {
   date: string;
@@ -138,10 +174,11 @@ const DEFAULT_WEEK_END_HOUR = 18;
 
 /**
  * Visible hour range for the week grid.
- * Defaults to 08:00–18:00 and expands to cover appointments in the week.
+ * Defaults to 08:00–18:00 and expands to cover appointments and availability.
  */
 export function getWeekVisibleHourRange(
   appointments: { start_time: string; end_time: string }[],
+  availability: { start_time: string; end_time: string }[] = [],
 ): WeekHourRange {
   let startHour = DEFAULT_WEEK_START_HOUR;
   let endHour = DEFAULT_WEEK_END_HOUR;
@@ -153,7 +190,17 @@ export function getWeekVisibleHourRange(
     // Round end up to the next hour if there are leftover minutes.
     const endMinutes = end.getHours() * 60 + end.getMinutes();
     const roundedEndHour = Math.ceil(endMinutes / 60);
-    endHour = Math.max(endHour, roundedEndHour === 0 && endMinutes > 0 ? 24 : roundedEndHour);
+    endHour = Math.max(
+      endHour,
+      roundedEndHour === 0 && endMinutes > 0 ? 24 : roundedEndHour,
+    );
+  }
+
+  for (const slot of availability) {
+    const startMinutes = timeToMinutes(slot.start_time);
+    const endMinutes = timeToMinutes(slot.end_time);
+    startHour = Math.min(startHour, Math.floor(startMinutes / 60));
+    endHour = Math.max(endHour, Math.ceil(endMinutes / 60));
   }
 
   if (endHour <= startHour) {
@@ -168,6 +215,41 @@ export type CalendarBlockLayout = {
   heightPercent: number;
 };
 
+function blockLayoutFromMinutes(
+  startMinutes: number,
+  endMinutes: number,
+  range: WeekHourRange,
+): CalendarBlockLayout {
+  const rangeStartMinutes = range.startHour * 60;
+  const rangeEndMinutes = range.endHour * 60;
+  const totalMinutes = Math.max(rangeEndMinutes - rangeStartMinutes, 1);
+
+  const clampedStart = Math.max(startMinutes, rangeStartMinutes);
+  const clampedEnd = Math.min(endMinutes, rangeEndMinutes);
+  const duration = Math.max(
+    clampedEnd - clampedStart,
+    SLOT_GRANULARITY_MINUTES,
+  );
+
+  return {
+    topPercent: ((clampedStart - rangeStartMinutes) / totalMinutes) * 100,
+    heightPercent: (duration / totalMinutes) * 100,
+  };
+}
+
+/** Positions a same-day HH:MM / HH:MM:SS range within the visible hour range. */
+export function getTimeOfDayBlockLayout(
+  startTime: string,
+  endTime: string,
+  range: WeekHourRange,
+): CalendarBlockLayout {
+  return blockLayoutFromMinutes(
+    timeToMinutes(startTime),
+    timeToMinutes(endTime),
+    range,
+  );
+}
+
 /** Positions an appointment block within a day column for the visible hour range. */
 export function getAppointmentBlockLayout(
   startIso: string,
@@ -176,19 +258,7 @@ export function getAppointmentBlockLayout(
 ): CalendarBlockLayout {
   const start = new Date(startIso);
   const end = new Date(endIso);
-  const rangeStartMinutes = range.startHour * 60;
-  const rangeEndMinutes = range.endHour * 60;
-  const totalMinutes = Math.max(rangeEndMinutes - rangeStartMinutes, 1);
-
   const startMinutes = start.getHours() * 60 + start.getMinutes();
   const endMinutes = end.getHours() * 60 + end.getMinutes();
-
-  const clampedStart = Math.max(startMinutes, rangeStartMinutes);
-  const clampedEnd = Math.min(endMinutes, rangeEndMinutes);
-  const duration = Math.max(clampedEnd - clampedStart, SLOT_GRANULARITY_MINUTES);
-
-  return {
-    topPercent: ((clampedStart - rangeStartMinutes) / totalMinutes) * 100,
-    heightPercent: (duration / totalMinutes) * 100,
-  };
+  return blockLayoutFromMinutes(startMinutes, endMinutes, range);
 }

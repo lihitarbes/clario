@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { AvailabilitySettings } from "@/components/availability/AvailabilitySettings";
+import { CollapsibleAvailabilityEditor } from "@/components/availability/CollapsibleAvailabilityEditor";
 import { AppointmentCalendar } from "@/components/appointments/AppointmentCalendar";
 import { PendingAppointmentRequests } from "@/components/appointments/PendingAppointmentRequests";
 import { WeekNavigator } from "@/components/appointments/WeekNavigator";
@@ -11,23 +11,27 @@ import {
   getWeekEnd,
   getWeekStart,
   parseWeekParam,
+  resolveWeekSearchParam,
 } from "@/lib/appointments/time";
+import { normalizeAvailabilityDateKey } from "@/lib/appointments/slots";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
+import type { BusinessAvailability } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
 export default async function CalendarPage({
   searchParams,
 }: PageProps<"/calendar">) {
-  const { week } = await searchParams;
+  const params = await searchParams;
+  const week = resolveWeekSearchParam(params.week);
   const business = await getOwnedBusiness();
 
   if (!business) {
     return null;
   }
 
-  const weekReference = parseWeekParam(typeof week === "string" ? week : undefined);
+  const weekReference = parseWeekParam(week);
   const weekStart = getWeekStart(weekReference ?? new Date());
   const weekEnd = getWeekEnd(weekStart);
 
@@ -39,7 +43,6 @@ export default async function CalendarPage({
         .from("business_availability")
         .select("*")
         .eq("business_id", business.id)
-        .order("day_of_week")
         .order("start_time"),
       supabase
         .from("appointments")
@@ -56,7 +59,12 @@ export default async function CalendarPage({
         .order("start_time"),
     ]);
 
-  const availability = availabilityResult.data ?? [];
+  const availability = ((availabilityResult.data ?? []) as BusinessAvailability[]).map(
+    (row) => ({
+      ...row,
+      specific_date: normalizeAvailabilityDateKey(row.specific_date),
+    }),
+  );
   const appointments = (appointmentsResult.data ??
     []) as AppointmentWithClient[];
   const pendingAppointments = (pendingResult.data ??
@@ -68,7 +76,7 @@ export default async function CalendarPage({
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">Calendar</h1>
           <p className="mt-1 text-sm text-zinc-600">
-            Manage appointments and weekly availability for {business.name}.
+            Manage appointments and bookable slots for {business.name}.
           </p>
         </div>
         <Button asChild>
@@ -86,20 +94,18 @@ export default async function CalendarPage({
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-lg font-medium text-zinc-900">Appointments</h2>
+        <h2 className="text-lg font-medium text-zinc-900">Schedule</h2>
         <Suspense fallback={null}>
           <WeekNavigator weekStart={formatWeekParam(weekStart)} />
         </Suspense>
         <AppointmentCalendar
           weekStart={formatWeekParam(weekStart)}
           appointments={appointments}
+          availability={availability}
         />
       </section>
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-medium text-zinc-900">Availability</h2>
-        <AvailabilitySettings slots={availability} />
-      </section>
+      <CollapsibleAvailabilityEditor slots={availability} />
     </div>
   );
 }

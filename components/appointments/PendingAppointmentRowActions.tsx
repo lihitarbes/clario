@@ -5,6 +5,7 @@ import {
   approveAppointmentAction,
   rejectAppointmentAction,
 } from "@/actions/appointments";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 
 type PendingAppointmentRowActionsProps = {
@@ -43,7 +44,11 @@ export function PendingAppointmentRowActions({
         <form action={approveAction}>
           <input type="hidden" name="appointmentId" value={appointmentId} />
           <Button type="submit" size="sm" disabled={approvePending || rejectPending}>
-            {approvePending ? "Approving…" : "Approve"}
+            <ActionPendingLabel
+              pending={approvePending}
+              pendingLabel="Approving…"
+              idleLabel="Approve"
+            />
           </Button>
         </form>
         <form action={rejectAction} onSubmit={handleDecline}>
@@ -54,7 +59,11 @@ export function PendingAppointmentRowActions({
             size="sm"
             disabled={approvePending || rejectPending}
           >
-            {rejectPending ? "Declining…" : "Decline"}
+            <ActionPendingLabel
+              pending={rejectPending}
+              pendingLabel="Declining…"
+              idleLabel="Decline"
+            />
           </Button>
         </form>
       </div>

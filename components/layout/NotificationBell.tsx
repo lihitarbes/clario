@@ -1,10 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import Link from "next/link";
+import { useActionState, useTransition } from "react";
+import { useFormStatus } from "react-dom";
 import {
   markAllNotificationsReadAction,
   markNotificationReadAction,
 } from "@/actions/notifications";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,6 +19,8 @@ import {
   formatNotificationTimestamp,
   stripLegacyUtcTimeFromMessage,
 } from "@/lib/notifications/display";
+import { notificationHref } from "@/lib/notifications/links";
+import type { NotificationViewerRole } from "@/lib/notifications/links";
 import type { NotificationWithAppointment } from "@/lib/notifications/queries";
 import { cn } from "@/lib/utils";
 import { Bell } from "lucide-react";
@@ -23,12 +28,67 @@ import { Bell } from "lucide-react";
 type NotificationBellProps = {
   notifications: NotificationWithAppointment[];
   unreadCount: number;
+  viewerRole: NotificationViewerRole;
 };
+
+function OpenNotificationButton({
+  href,
+  notificationId,
+  isUnread,
+}: {
+  href: string;
+  notificationId: string;
+  isUnread: boolean;
+}) {
+  const [, startTransition] = useTransition();
+
+  return (
+    <Button asChild variant="outline" size="sm">
+      <Link
+        href={href}
+        onClick={() => {
+          if (!isUnread) {
+            return;
+          }
+          startTransition(() => {
+            const formData = new FormData();
+            formData.set("notificationId", notificationId);
+            void markNotificationReadAction(null, formData);
+          });
+        }}
+      >
+        Open
+      </Link>
+    </Button>
+  );
+}
+
+function MarkAllReadSubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button
+      type="submit"
+      variant="ghost"
+      size="sm"
+      className="h-8 px-2 text-xs"
+      disabled={pending}
+    >
+      <ActionPendingLabel
+        pending={pending}
+        pendingLabel="Marking…"
+        idleLabel="Mark all as read"
+      />
+    </Button>
+  );
+}
 
 function NotificationItem({
   notification,
+  viewerRole,
 }: {
   notification: NotificationWithAppointment;
+  viewerRole: NotificationViewerRole;
 }) {
   const isUnread = notification.read_at === null;
   const [state, action, pending] = useActionState(markNotificationReadAction, null);
@@ -40,6 +100,7 @@ function NotificationItem({
           notification.appointments.end_time,
         )
       : null;
+  const href = notificationHref(notification, viewerRole);
 
   return (
     <div
@@ -72,14 +133,27 @@ function NotificationItem({
           <p className="mt-1 text-xs text-zinc-500">
             {formatNotificationTimestamp(notification.created_at)}
           </p>
-          {isUnread ? (
-            <form action={action} className="mt-2">
-              <input type="hidden" name="notificationId" value={notification.id} />
-              <Button type="submit" variant="ghost" size="sm" disabled={pending}>
-                {pending ? "Marking…" : "Mark as read"}
-              </Button>
-            </form>
-          ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {href ? (
+              <OpenNotificationButton
+                href={href}
+                notificationId={notification.id}
+                isUnread={isUnread}
+              />
+            ) : null}
+            {isUnread ? (
+              <form action={action}>
+                <input type="hidden" name="notificationId" value={notification.id} />
+                <Button type="submit" variant="ghost" size="sm" disabled={pending}>
+                  <ActionPendingLabel
+                    pending={pending}
+                    pendingLabel="Marking…"
+                    idleLabel="Mark as read"
+                  />
+                </Button>
+              </form>
+            ) : null}
+          </div>
           {state && !state.success ? (
             <p className="mt-1 text-xs text-red-600" role="alert">{state.error}</p>
           ) : null}
@@ -92,6 +166,7 @@ function NotificationItem({
 export function NotificationBell({
   notifications,
   unreadCount,
+  viewerRole,
 }: NotificationBellProps) {
   const badgeLabel =
     unreadCount > 99 ? "99+" : unreadCount > 0 ? String(unreadCount) : null;
@@ -123,14 +198,7 @@ export function NotificationBell({
           <p className="text-sm font-semibold text-zinc-900">Notifications</p>
           {unreadCount > 0 ? (
             <form action={markAllNotificationsReadAction}>
-              <Button
-                type="submit"
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2 text-xs"
-              >
-                Mark all as read
-              </Button>
+              <MarkAllReadSubmitButton />
             </form>
           ) : null}
         </div>
@@ -141,7 +209,11 @@ export function NotificationBell({
         ) : (
           <div className="max-h-80 overflow-y-auto">
             {notifications.map((notification) => (
-              <NotificationItem key={notification.id} notification={notification} />
+              <NotificationItem
+                key={notification.id}
+                notification={notification}
+                viewerRole={viewerRole}
+              />
             ))}
           </div>
         )}

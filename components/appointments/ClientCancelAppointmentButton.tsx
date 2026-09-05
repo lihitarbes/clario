@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { cancelClientAppointmentAction } from "@/actions/appointments";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 
 type ClientCancelAppointmentButtonProps = {
@@ -31,7 +32,11 @@ export function ClientCancelAppointmentButton({
       <form action={formAction} onSubmit={handleCancel}>
         <input type="hidden" name="appointmentId" value={appointmentId} />
         <Button type="submit" variant="outline" size="sm" disabled={pending}>
-          {pending ? "Cancelling…" : "Cancel appointment"}
+          <ActionPendingLabel
+            pending={pending}
+            pendingLabel="Cancelling…"
+            idleLabel="Cancel appointment"
+          />
         </Button>
       </form>
       {state && !state.success ? (

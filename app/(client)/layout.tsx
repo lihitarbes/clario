@@ -8,6 +8,7 @@ import {
 import {
   getRecentNotifications,
   getUnreadNotificationCount,
+  getUnreadVisitPublishedVisitIds,
 } from "@/lib/notifications/queries";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,8 +30,11 @@ export default async function ClientLayout({
   const supabase = await createClient();
   await linkClientsByAuthenticatedEmail(supabase, profile.id);
 
-  const notifications = await getRecentNotifications(supabase, profile.id);
-  const unreadCount = await getUnreadNotificationCount(supabase, profile.id);
+  const [notifications, unreadCount, unreadVisitIds] = await Promise.all([
+    getRecentNotifications(supabase, profile.id),
+    getUnreadNotificationCount(supabase, profile.id),
+    getUnreadVisitPublishedVisitIds(supabase, profile.id),
+  ]);
 
   return (
     <div className="min-h-full bg-zinc-50">
@@ -38,6 +42,7 @@ export default async function ClientLayout({
         profile={profile}
         notifications={notifications}
         unreadCount={unreadCount}
+        hasUnreadVisitPublished={unreadVisitIds.size > 0}
       />
       <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
     </div>

@@ -20,7 +20,13 @@ export type DocumentType =
 
 export type FormAssignmentStatus = "pending" | "completed";
 
-export type PurchaseStatus = "pending" | "confirmed" | "cancelled";
+export type PurchaseStatus =
+  | "pending"
+  | "confirmed"
+  | "completed"
+  | "cancelled";
+
+export type ProductCurrency = "ILS" | "USD";
 
 export type VisitPublicationScope = "full" | "recommendations_only";
 
@@ -28,7 +34,15 @@ export type NotificationType =
   | "appointment_request"
   | "appointment_cancelled_by_client"
   | "appointment_approved"
-  | "appointment_declined";
+  | "appointment_declined"
+  | "form_assigned"
+  | "form_update_requested"
+  | "form_submitted"
+  | "purchase_requested"
+  | "purchase_confirmed"
+  | "purchase_completed"
+  | "purchase_cancelled"
+  | "visit_published";
 
 export type RecommendationCategory =
   | "product"
@@ -38,12 +52,29 @@ export type RecommendationCategory =
   | "other";
 
 /** JSON array stored on forms.fields */
+export type FormFieldType =
+  | "short_text"
+  | "long_text"
+  | "yes_no"
+  | "single_choice"
+  | "multiple_choice"
+  | "date"
+  | "checkbox";
+
+export type FormFieldVisibleWhen = {
+  questionId: string;
+  value: string | boolean;
+};
+
 export type FormFieldDefinition = {
   id: string;
   label: string;
-  type: "text" | "textarea" | "checkbox" | "select" | "date";
+  type: FormFieldType;
   required: boolean;
+  order: number;
   options?: string[];
+  helpText?: string;
+  visibleWhen?: FormFieldVisibleWhen;
 };
 
 export type Json =
@@ -58,6 +89,7 @@ export type Profile = {
   id: string;
   full_name: string;
   email: string;
+  phone: string | null;
   role: UserRole;
   created_at: string;
 };
@@ -88,7 +120,8 @@ export type Client = {
 export type BusinessAvailability = {
   id: string;
   business_id: string;
-  day_of_week: number;
+  day_of_week: number | null;
+  specific_date: string | null;
   start_time: string;
   end_time: string;
 };
@@ -133,16 +166,32 @@ export type Form = {
   title: string;
   description: string | null;
   fields: FormFieldDefinition[];
+  renewal_interval_months: number | null;
+  archived_at: string | null;
   created_at: string;
 };
+
+export type FormAssignmentKind =
+  | "owner_assign"
+  | "owner_update_request"
+  | "client_update";
 
 export type FormAssignment = {
   id: string;
   form_id: string;
   client_id: string;
   status: FormAssignmentStatus;
+  assignment_kind: FormAssignmentKind;
+  prefill_from_submission_id: string | null;
   assigned_at: string;
   completed_at: string | null;
+};
+
+export type FormSubmissionSnapshot = {
+  formTitle: string;
+  formDescription: string | null;
+  renewalIntervalMonths: number | null;
+  submittedFieldDefinitions: FormFieldDefinition[];
 };
 
 export type FormSubmission = {
@@ -151,7 +200,10 @@ export type FormSubmission = {
   form_assignment_id: string;
   client_id: string;
   answers: Json;
+  snapshot: FormSubmissionSnapshot;
   submitted_at: string;
+  valid_until: string | null;
+  supersedes_submission_id: string | null;
 };
 
 export type Product = {
@@ -160,7 +212,9 @@ export type Product = {
   name: string;
   description: string | null;
   price: number;
+  currency: ProductCurrency;
   is_active: boolean;
+  image_path: string | null;
   created_at: string;
 };
 
@@ -212,6 +266,9 @@ export type Notification = {
   appointment_id: string | null;
   business_id: string | null;
   client_id: string | null;
+  form_assignment_id: string | null;
+  purchase_id: string | null;
+  visit_id: string | null;
   read_at: string | null;
   created_at: string;
 };
@@ -231,6 +288,11 @@ export type CompleteAppointmentWithVisitArgs = {
   p_appointment_id: string;
 };
 
+export type SubmitFormAssignmentArgs = {
+  p_form_assignment_id: string;
+  p_answers: Json;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -240,12 +302,14 @@ export type Database = {
           id: string;
           full_name: string;
           email: string;
+          phone?: string | null;
           role: UserRole;
           created_at?: string;
         };
         Update: {
           full_name?: string;
           email?: string;
+          phone?: string | null;
           role?: UserRole;
         };
         Relationships: [];
@@ -299,12 +363,14 @@ export type Database = {
         Insert: {
           id?: string;
           business_id: string;
-          day_of_week: number;
+          day_of_week?: number | null;
+          specific_date?: string | null;
           start_time: string;
           end_time: string;
         };
         Update: {
-          day_of_week?: number;
+          day_of_week?: number | null;
+          specific_date?: string | null;
           start_time?: string;
           end_time?: string;
         };
@@ -361,12 +427,16 @@ export type Database = {
           title: string;
           description?: string | null;
           fields?: FormFieldDefinition[];
+          renewal_interval_months?: number | null;
+          archived_at?: string | null;
           created_at?: string;
         };
         Update: {
           title?: string;
           description?: string | null;
           fields?: FormFieldDefinition[];
+          renewal_interval_months?: number | null;
+          archived_at?: string | null;
         };
         Relationships: [];
       };
@@ -377,11 +447,15 @@ export type Database = {
           form_id: string;
           client_id: string;
           status?: FormAssignmentStatus;
+          assignment_kind?: FormAssignmentKind;
+          prefill_from_submission_id?: string | null;
           assigned_at?: string;
           completed_at?: string | null;
         };
         Update: {
           status?: FormAssignmentStatus;
+          assignment_kind?: FormAssignmentKind;
+          prefill_from_submission_id?: string | null;
           completed_at?: string | null;
         };
         Relationships: [];
@@ -394,10 +468,16 @@ export type Database = {
           form_assignment_id: string;
           client_id: string;
           answers?: Json;
+          snapshot: FormSubmissionSnapshot;
           submitted_at?: string;
+          valid_until?: string | null;
+          supersedes_submission_id?: string | null;
         };
         Update: {
           answers?: Json;
+          snapshot?: FormSubmissionSnapshot;
+          valid_until?: string | null;
+          supersedes_submission_id?: string | null;
         };
         Relationships: [];
       };
@@ -409,14 +489,18 @@ export type Database = {
           name: string;
           description?: string | null;
           price: number;
+          currency?: ProductCurrency;
           is_active?: boolean;
+          image_path?: string | null;
           created_at?: string;
         };
         Update: {
           name?: string;
           description?: string | null;
           price?: number;
+          currency?: ProductCurrency;
           is_active?: boolean;
+          image_path?: string | null;
         };
         Relationships: [];
       };
@@ -503,6 +587,9 @@ export type Database = {
           appointment_id?: string | null;
           business_id?: string | null;
           client_id?: string | null;
+          form_assignment_id?: string | null;
+          purchase_id?: string | null;
+          visit_id?: string | null;
           read_at?: string | null;
           created_at?: string;
         };

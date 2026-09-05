@@ -75,4 +75,6 @@ Route groups `(business)` and `(client)` organize code and layouts; they do **no
 
 ## Deployment
 
-Deployment to Vercel and Supabase will be configured in a later milestone.
+Intended hosting is Vercel for the Next.js app, with Supabase for the database
+and storage. Configure project environment variables from `.env.example` when
+you deploy.

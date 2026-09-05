@@ -1,9 +1,11 @@
 "use server";
 
 import { getCurrentProfile } from "@/lib/auth/permissions";
+import { markVisitPublishedNotificationsRead } from "@/lib/notifications/queries";
 import { revalidateNotificationLayouts } from "@/lib/notifications/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import { notificationIdSchema } from "@/lib/validation/notifications";
+import { visitIdSchema } from "@/lib/validation/visits";
 import { actionError, actionSuccess, type ActionResult } from "@/types/actions";
 
 type NotificationActionState = ActionResult<{ message?: string }> | null;
@@ -66,4 +68,34 @@ export async function markAllNotificationsReadAction(): Promise<void> {
   }
 
   revalidateNotificationLayouts();
+}
+
+/** Marks unread visit_published notifications for one visit as read. */
+export async function markVisitPublishedNotificationReadAction(
+  visitId: string,
+): Promise<void> {
+  const parsed = visitIdSchema.safeParse(visitId);
+  if (!parsed.success) {
+    return;
+  }
+
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    return;
+  }
+
+  const supabase = await createClient();
+
+  try {
+    const marked = await markVisitPublishedNotificationsRead(
+      supabase,
+      profile.id,
+      parsed.data,
+    );
+    if (marked > 0) {
+      revalidateNotificationLayouts();
+    }
+  } catch {
+    // Best-effort: visit page content must still load.
+  }
 }

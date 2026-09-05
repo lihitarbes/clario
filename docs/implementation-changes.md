@@ -401,4 +401,251 @@ The original PDF is not modified. When the course documentation is updated later
 
 ---
 
+## Milestone 7.1 — form templates & builder
+
+### Database — `forms.renewal_interval_months`, `forms.archived_at`
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | `renewal_interval_months integer NULL` (NULL = never); `archived_at timestamptz NULL` for soft archive. CHECK: months NULL or &gt; 0. Partial index `forms_business_active_idx` for active templates. Dropped `forms_delete_owner` RLS policy — owners cannot hard-delete forms (prevents CASCADE loss of historical submissions). Migration `20260829160000_form_templates_builder_and_archive.sql`. |
+| **Why** | M7 template builder needs renewal settings and safe archival without destroying submission history. |
+| **Required or recommended** | **Required** (approved M7.1) |
+| **Original doc section** | Product Specification (Forms) |
+
+---
+
+### Milestone 7.1 implementation notes
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Owner `/forms`, `/forms/new`, `/forms/[formId]` with form builder (question types, conditionals, renewal presets, reorder). Health Declaration application starter (not DB seed). `createFormAction`, `updateFormAction`, `archiveFormAction`. Extended `FormFieldDefinition` JSON contract with legacy type normalization (`text`→`short_text`, etc.). Hebrew form content + `dir="auto"` on form-owned fields; English and Hebrew Health Declaration starters. |
+| **Why** | M7.1 application layer after approved schema extension. Assignments, submissions, and notifications deferred to M7.2+. |
+| **Required or recommended** | **Required** (implementation plan) |
+| **Original doc section** | Product Specification (Forms) |
+
+---
+
+## Milestone 7.2 — assign, fill, submit
+
+### Database — submission snapshot + `submit_form_assignment` RPC
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | `form_submissions.snapshot` (NOT NULL), `valid_until`, `supersedes_submission_id`; `form_assignments.assignment_kind` (default `owner_assign`). `submit_form_assignment` SECURITY INVOKER RPC; trigger completes assignment on submission insert. Dropped client assignment UPDATE policy. Migration `20260829170000_form_assign_submit_rpc_and_snapshot.sql`. |
+| **Why** | Immutable submission snapshots; atomic submit; clients cannot mark assignments completed without a submission row. |
+| **Required or recommended** | **Required** (approved M7.2) |
+| **Original doc section** | Product Specification (Forms) |
+
+---
+
+### Milestone 7.2 implementation notes
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Owner assigns active forms on client profile. Client `/my-forms` lists pending/completed assignments; `/my-forms/[assignmentId]` dynamic fill + submit. Server-side answer validation; shared conditional visibility; RTL form content; yes/no canonical `yes`/`no` with localized labels. |
+| **Why** | M7.2 application layer after approved migration. |
+| **Required or recommended** | **Required** (implementation plan) |
+| **Original doc section** | Product Specification (Forms) |
+
+---
+
+### Milestone 7.2 fix — submit RPC and RLS `FOR UPDATE`
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | `submit_form_assignment` no longer uses `SELECT … FOR UPDATE` on `form_assignments`. Migration `20260829180000_fix_submit_rpc_select_without_for_update.sql` (also reflected in the M7.2 migration for clean installs). |
+| **Why** | Under PostgreSQL RLS, `SELECT FOR UPDATE` requires an `UPDATE` policy. M7.2 dropped the client assignment UPDATE policy so clients cannot complete assignments without inserting a submission; that made the lock query return no row and raise `assignment_not_found` for valid pending assignments. Concurrent submit remains guarded by unique `form_assignment_id` and the pending INSERT check. |
+| **Required or recommended** | **Required** (bug fix) |
+| **Original doc section** | Product Specification (Forms) |
+
+---
+
+## Milestone 7.3 — form history & submission viewer
+
+### Application — read-only historical submissions from snapshot
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Owner opens completed assignments at `/clients/[id]/forms/[assignmentId]`. Client opens completed assignments at `/my-forms/[assignmentId]` (read-only). Shared `FormSubmissionViewer` renders **only** `form_submissions.snapshot` + `answers` (not the live template). Validity badges: no expiry / valid until / expired. |
+| **Why** | M7.3 historical inspection without update/renewal flows (deferred to M7.4). |
+| **Required or recommended** | **Required** (implementation plan) |
+| **Original doc section** | Product Specification (Forms) |
+
+---
+
+## Milestone 7.4 / 7.5 — form updates + form notifications
+
+### Database — prefill + form notifications
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | `form_assignments.prefill_from_submission_id`; client INSERT RLS for `assignment_kind = client_update`; `submit_form_assignment` sets `supersedes_submission_id` from prefill; `notifications.form_assignment_id`; types `form_assigned`, `form_update_requested`, `form_submitted`; triggers on assignment/submission insert. Migration `20260829190000_form_updates_and_notifications.sql`. |
+| **Why** | Versioned updates without mutating history; reuse existing in-app notification bell. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Product Specification (Forms); Notifications |
+
+---
+
+## Milestone 8 — products, shop, purchases MVP
+
+### Application — catalog + offline purchase requests
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Owner `/products`, `/products/new`, `/products/[productId]` for create/edit/activate-deactivate (`is_active`). Client `/shop` browses active products by linked business, submits pending purchase + items, views order history, can cancel pending. Owner confirms/cancels pending purchases on `/products`. No payment gateway. No new migration — reused existing `products`, `purchases`, `purchase_items` schema and RLS. |
+| **Why** | University MVP purchase request flow without Stripe. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Architecture Design §8; Technical Design §6 (Purchases) |
+
+---
+
+## Milestone 8.1 — client profile, purchase completed, WhatsApp
+
+### Database — `purchases.status` includes `completed`
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Status CHECK extended to `pending`, `confirmed`, `completed`, `cancelled`. Added nullable `profiles.phone` for account-level contact. Migration `20260904120000_purchase_status_completed.sql`. |
+| **Why** | Distinguish owner approval (`confirmed`) from fulfillment (`completed`). |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Technical Design §6 (Purchases) |
+
+### Application — profile + status flow + WhatsApp deep link
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Client `/profile` edits `profiles.full_name`/`email` and syncs name/email/phone to linked `clients` rows (phone already on `clients`). Purchase owner transitions: pending→confirm/cancel; confirmed→complete/cancel. WhatsApp `wa.me` link on owner purchase cards when `clients.phone` is set. |
+| **Why** | Contact data for practitioners; clearer fulfillment; free WhatsApp contact without API. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Product Specification (Clients, Purchases) |
+
+---
+
+## Milestone 8.2 — product images
+
+### Database / storage — `products.image_path` + `product-images` bucket
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Nullable `products.image_path` stores Storage object path. Private bucket `product-images` (5 MB; jpeg/png/webp). Path `{business_id}/products/{product_id}/{file}`. Owner CRUD RLS; linked clients SELECT active product images only. Migration `20260904130000_product_images_storage.sql`. Corrective migration `20260904150000_product_images_storage_security_definer.sql` moves product ownership checks into SECURITY DEFINER helpers so Storage INSERT no longer fails under nested `products` RLS. |
+| **Why** | Visual catalog without storing bytes in Postgres. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Technical Design (Products / Storage) |
+
+---
+
+## Milestone 8.3 — buy again, shop deep links, recommendation ↔ product
+
+### Database — recommendation product FK soft delete
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | `visit_recommendations.product_id` FK now `ON DELETE SET NULL` so deleting a catalog product clears the link but keeps recommendation text. Reused existing nullable `product_id` and `products.image_path`. Migration `20260904140000_visit_recommendation_product_on_delete_set_null.sql`. |
+| **Why** | Preserve historical recommendations when products are removed. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Product Specification (Visits / Shop) |
+
+### Application — buy again + deep link + client CTA
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Client `/shop` Buy again from confirmed/completed purchase history (active products only, deduped, most recent first). `/shop?product=<id>` selects business, scrolls, and highlights the product. Client visit recommendations show “View product” CTA when linked product is active; inactive links stay visible without purchase CTA. Owner picker prefers active products (“No linked product” option). |
+| **Why** | Connect catalog, shop repurchase, and visit recommendations end-to-end. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Product Specification (Shop / Visits) |
+
+---
+
+## Milestone 8.4 — shop grid + cart
+
+### Application — catalog grid and client cart
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Client `/shop` uses compact responsive grids for Buy again and All products. Client-side cart (per business, localStorage) with drawer UI; “Add to cart” from catalog and Buy again; one pending purchase with multiple `purchase_items` via existing `createClientPurchaseAction`. Cart / My Orders header actions; order history in drawer. No migration. |
+| **Why** | E-commerce-style browsing without mixing businesses in one order. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Product Specification (Shop / Purchases) |
+
+---
+
+## Milestone 8.5 — purchase notifications
+
+### Database — purchase notification types
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Added `purchase_requested`, `purchase_confirmed`, `purchase_completed`, `purchase_cancelled` to notifications type CHECK; nullable `notifications.purchase_id`; triggers on first `purchase_items` insert and `purchases.status` update. Migration `20260904160000_purchase_notifications.sql`. |
+| **Why** | Keep owners and clients informed of purchase lifecycle via existing NotificationBell. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Product Specification (Notifications / Purchases) |
+
+---
+
+## Milestone 9.1 — owner documents MVP
+
+### Database / storage — documents hardening + visit check
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Hardened `documents` Storage path helpers (safe UUID parse); SECURITY DEFINER write/read helpers; stricter INSERT/UPDATE policies requiring matching document metadata. BEFORE trigger ensures optional `visit_id` belongs to the same client and business. Migration `20260904170000_documents_storage_hardening_and_visit_check.sql`. |
+| **Why** | Avoid Storage RLS failures and mismatched visit links. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Technical Design §3 / §9 (Documents) |
+
+### Application — owner client documents
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Owner `/clients/[id]` Documents section: upload (type + optional visit), list, signed-URL open, delete. Metadata-first upload then Storage object; delete metadata then best-effort Storage remove. |
+| **Why** | D1 owner documents MVP without client/ZIP/notifications yet. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Product Specification (Documents) |
+
+---
+
+## Milestone 9.2 — client visit documents + reimbursement ZIP
+
+### Application — client visit documents
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | Client `/visits/[visitId]` shows visit-linked documents (read-only) with short-lived signed URLs. Access is gated by loading the visit from `client_visits` first (published + linked only). No upload/edit/delete for clients. |
+| **Why** | Visit-centric document sharing for reimbursement. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Product Specification (Documents / Reimbursement) |
+
+### Application — reimbursement package ZIP
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | `Prepare reimbursement` on eligible visits opens a document multi-select (default all). `POST /api/reimbursement/package` builds a ZIP of selected visit-linked documents after re-validating via `client_visits` + document ownership. Dependency: `jszip`. No PDF merge, no insurer integration, no migration. |
+| **Why** | Approved MVP reimbursement flow. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Product Specification (Reimbursement) |
+
+---
+
+## Milestone 10 — date-specific availability + visit published notifications
+
+### Database — date-specific availability
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | `business_availability.day_of_week` nullable; `specific_date date`; XOR mode CHECK (recurring vs date-specific). Migration `20260904180000_business_availability_specific_date.sql`. Slot generation merges overlapping/adjacent weekly + date ranges for the target date. |
+| **Why** | Additive one-off hours without closed-day overrides. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Product Specification (Calendar / Availability) |
+
+### Database / application — visit published notifications
+
+| Field | Detail |
+|-------|--------|
+| **What changed** | `notifications.visit_id`, type `visit_published`, first-publish trigger with duplicate guard. Client Visits nav unread dot; visit card “New”; mark read on visit open. Migration `20260904190000_visit_published_notifications.sql`. |
+| **Why** | Notify clients when a visit is first shared. |
+| **Required or recommended** | **Required** |
+| **Original doc section** | Product Specification (Notifications / Visits) |
+
+---
+
 *New entries will be appended as milestones are completed and as additional design-level changes are approved.*

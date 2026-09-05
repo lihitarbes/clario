@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormStatus } from "react-dom";
 import { signOutAction } from "@/actions/auth";
 import {
   DropdownMenu,
@@ -9,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { profileInitials, roleLabel } from "@/lib/auth/display";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/types/database";
@@ -16,6 +18,35 @@ import type { Profile } from "@/types/database";
 type UserMenuProps = {
   profile: Pick<Profile, "full_name" | "role">;
 };
+
+/**
+ * Radix menu items call preventDefault on select, which blocks nested
+ * submit buttons. Submit the parent form explicitly instead.
+ */
+function SignOutMenuItem() {
+  const { pending } = useFormStatus();
+
+  return (
+    <DropdownMenuItem
+      disabled={pending}
+      className="cursor-pointer"
+      onSelect={(event) => {
+        event.preventDefault();
+        const target = event.currentTarget;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+        target.closest("form")?.requestSubmit();
+      }}
+    >
+      <ActionPendingLabel
+        pending={pending}
+        pendingLabel="Signing out…"
+        idleLabel="Log out"
+      />
+    </DropdownMenuItem>
+  );
+}
 
 export function UserMenu({ profile }: UserMenuProps) {
   const initials = profileInitials(profile.full_name);
@@ -48,13 +79,9 @@ export function UserMenu({ profile }: UserMenuProps) {
           <p className="text-xs text-zinc-500">{role}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <form action={signOutAction} className="w-full">
-            <button type="submit" className="w-full text-left">
-              Log out
-            </button>
-          </form>
-        </DropdownMenuItem>
+        <form action={signOutAction} className="w-full">
+          <SignOutMenuItem />
+        </form>
       </DropdownMenuContent>
     </DropdownMenu>
   );

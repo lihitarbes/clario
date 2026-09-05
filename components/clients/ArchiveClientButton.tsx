@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { archiveClientAction } from "@/actions/clients";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -55,7 +56,11 @@ export function ArchiveClientButton({
           ) : null}
 
           <Button type="submit" variant="outline" disabled={pending}>
-            {pending ? "Archiving…" : "Archive client"}
+            <ActionPendingLabel
+              pending={pending}
+              pendingLabel="Archiving…"
+              idleLabel="Archive client"
+            />
           </Button>
         </form>
       </CardContent>

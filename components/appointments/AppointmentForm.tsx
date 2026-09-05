@@ -5,6 +5,7 @@ import {
   createAppointmentAction,
   updateAppointmentAction,
 } from "@/actions/appointments";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -109,8 +110,7 @@ export function AppointmentForm({
           {mode === "create" ? "New appointment" : "Edit appointment"}
         </CardTitle>
         <CardDescription>
-          Choose a date and a 15-minute start time. Appointments are stored in
-          UTC.
+          Choose a date and a 15-minute start time.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -212,13 +212,13 @@ export function AppointmentForm({
           ) : null}
 
           <Button type="submit" disabled={pending}>
-            {pending
-              ? mode === "create"
-                ? "Creating…"
-                : "Saving…"
-              : mode === "create"
-                ? "Create appointment"
-                : "Save changes"}
+            <ActionPendingLabel
+              pending={pending}
+              pendingLabel={mode === "create" ? "Creating…" : "Saving…"}
+              idleLabel={
+                mode === "create" ? "Create appointment" : "Save changes"
+              }
+            />
           </Button>
         </form>
       </CardContent>

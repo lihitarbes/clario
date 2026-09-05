@@ -3,10 +3,21 @@ import type { RecommendationCategory, VisitPublicationScope } from "@/types/data
 export function ownerPublicationScopeLabel(scope: VisitPublicationScope): string {
   switch (scope) {
     case "full":
-      return "Published — full visit";
+      return "Published · Full";
     case "recommendations_only":
-      return "Published — recommendations only";
+      return "Published · Recommendations & documents only";
   }
+}
+
+/** Concise owner-facing badge for visit list cards. */
+export function ownerVisitPublicationBadge(
+  publishedAt: string | null,
+  scope: VisitPublicationScope,
+): string {
+  if (!publishedAt) {
+    return "Draft";
+  }
+  return ownerPublicationScopeLabel(scope);
 }
 
 export function clientVisitListExcerpt(
@@ -15,7 +26,7 @@ export function clientVisitListExcerpt(
   max = 120,
 ): string {
   if (publicationScope === "recommendations_only") {
-    return "Recommendations from this visit";
+    return "Recommendations and documents from this visit";
   }
   return visitSummaryExcerpt(summary, max);
 }

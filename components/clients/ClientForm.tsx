@@ -5,6 +5,7 @@ import {
   createClientAction,
   updateClientAction,
 } from "@/actions/clients";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -103,13 +104,11 @@ export function ClientForm({ mode, client }: ClientFormProps) {
           ) : null}
 
           <Button type="submit" disabled={pending}>
-            {pending
-              ? mode === "create"
-                ? "Adding…"
-                : "Saving…"
-              : mode === "create"
-                ? "Add client"
-                : "Save changes"}
+            <ActionPendingLabel
+              pending={pending}
+              pendingLabel={mode === "create" ? "Adding…" : "Saving…"}
+              idleLabel={mode === "create" ? "Add client" : "Save changes"}
+            />
           </Button>
         </form>
       </CardContent>

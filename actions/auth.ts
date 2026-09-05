@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { linkClientsByAuthenticatedEmail } from "@/lib/auth/client-linking";
 import { mapAuthError } from "@/lib/auth/errors";
@@ -147,5 +148,7 @@ export async function signInAction(
 export async function signOutAction(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect("/");
+  // Clear cached RSC/layout auth UI (critical when logging out from `/`).
+  revalidatePath("/", "layout");
+  redirect("/login");
 }

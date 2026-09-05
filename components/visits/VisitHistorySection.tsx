@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { formatAppointmentTimeRange } from "@/lib/appointments/display";
 import {
-  clientVisitListExcerpt,
-  ownerPublicationScopeLabel,
+  ownerVisitPublicationBadge,
+  visitSummaryExcerpt,
 } from "@/lib/visits/display";
 import {
   Card,
@@ -56,6 +56,10 @@ export function VisitHistorySection({ visits }: VisitHistorySectionProps) {
                   )
                 : "—";
               const isPublished = visit.published_at !== null;
+              const statusLabel = ownerVisitPublicationBadge(
+                visit.published_at,
+                visit.publication_scope,
+              );
 
               return (
                 <li
@@ -75,19 +79,11 @@ export function VisitHistorySection({ visits }: VisitHistorySectionProps) {
                             : "border-amber-200 bg-amber-100 text-amber-800",
                         )}
                       >
-                        {isPublished
-                          ? ownerPublicationScopeLabel(visit.publication_scope)
-                          : "Draft"}
+                        {statusLabel}
                       </span>
                     </div>
                     <p className="text-sm text-zinc-600">
-                      {isPublished
-                        ? clientVisitListExcerpt(
-                            visit.publication_scope,
-                            visit.summary,
-                            80,
-                          )
-                        : clientVisitListExcerpt("full", visit.summary, 80)}
+                      {visitSummaryExcerpt(visit.summary, 80)}
                     </p>
                   </div>
                   <Link

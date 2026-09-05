@@ -36,9 +36,9 @@ export function formatAppointmentTimeRange(
 export function appointmentStatusLabel(status: AppointmentStatus): string {
   switch (status) {
     case "pending":
-      return "Pending approval";
+      return "Pending";
     case "scheduled":
-      return "Scheduled";
+      return "Booked";
     case "completed":
       return "Completed";
     case "cancelled":
@@ -46,18 +46,29 @@ export function appointmentStatusLabel(status: AppointmentStatus): string {
   }
 }
 
+/** Compact calendar-card label (same wording as badges for consistency). */
+export function appointmentCalendarStatusLabel(
+  status: AppointmentStatus,
+): string {
+  return appointmentStatusLabel(status);
+}
+
 export function appointmentStatusClassName(status: AppointmentStatus): string {
   switch (status) {
     case "pending":
-      return "bg-amber-100 text-amber-900 border-amber-200";
+      return "bg-amber-50 text-amber-900 border-amber-300";
     case "scheduled":
-      return "bg-blue-100 text-blue-800 border-blue-200";
+      return "bg-blue-50 text-blue-900 border-blue-300";
     case "completed":
-      return "bg-green-100 text-green-800 border-green-200";
+      return "bg-green-50 text-green-900 border-green-300";
     case "cancelled":
-      return "bg-zinc-100 text-zinc-600 border-zinc-200";
+      return "bg-red-50 text-red-800 border-red-200";
   }
 }
+
+export const availabilityCalendarClassName =
+  "border border-dashed border-emerald-200/80 bg-emerald-50/50 text-emerald-900/80";
+
 
 export function computeDurationMinutes(
   startIso: string,

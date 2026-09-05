@@ -39,9 +39,11 @@ export function BusinessNav({
         <div className="flex flex-wrap items-center gap-2">
           <nav className="flex flex-wrap items-center gap-1">
             {navItems.map((item) => {
-              const isActive =
-                currentPath === item.href ||
-                currentPath.startsWith(`${item.href}/`);
+              const isVisitRecord = currentPath.startsWith("/calendar/visits/");
+              const isActive = isVisitRecord
+                ? item.href === "/calendar"
+                : currentPath === item.href ||
+                  currentPath.startsWith(`${item.href}/`);
 
               return (
                 <Link
@@ -62,6 +64,7 @@ export function BusinessNav({
           <NotificationBell
             notifications={notifications}
             unreadCount={unreadCount}
+            viewerRole="business_owner"
           />
           <UserMenu profile={profile} />
         </div>

@@ -5,7 +5,11 @@ import {
   buildClientVisitListItems,
   type ClientVisitAppointmentMeta,
 } from "@/lib/visits/client-queries";
-import { getLinkedClients } from "@/lib/auth/permissions";
+import {
+  getCurrentProfile,
+  getLinkedClients,
+} from "@/lib/auth/permissions";
+import { getUnreadVisitPublishedVisitIds } from "@/lib/notifications/queries";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +18,7 @@ export default async function ClientVisitsPage() {
   const linkedClients = await getLinkedClients();
   const clientIds = linkedClients.map((client) => client.id);
   const showBusinessName = linkedClients.length > 1;
+  const profile = await getCurrentProfile();
 
   const supabase = await createClient();
 
@@ -42,6 +47,9 @@ export default async function ClientVisitsPage() {
   }
 
   const visitItems = buildClientVisitListItems(visits, appointments);
+  const unreadVisitIds = profile
+    ? await getUnreadVisitPublishedVisitIds(supabase, profile.id)
+    : new Set<string>();
 
   return (
     <div className="space-y-8">
@@ -74,6 +82,7 @@ export default async function ClientVisitsPage() {
               key={visit.id}
               visit={visit}
               showBusinessName={showBusinessName}
+              unread={unreadVisitIds.has(visit.id)}
             />
           ))}
         </ul>

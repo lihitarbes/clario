@@ -6,6 +6,7 @@ import {
   unpublishVisitAction,
   updateVisitPublicationScopeAction,
 } from "@/actions/visits";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -36,6 +37,7 @@ type SharingChooserProps = {
   visitId: string;
   defaultScope: VisitPublicationScope;
   submitLabel: string;
+  pendingLabel: string;
   formAction: (payload: FormData) => void;
   pending: boolean;
   error: string | null;
@@ -47,6 +49,7 @@ function SharingChooser({
   visitId,
   defaultScope,
   submitLabel,
+  pendingLabel,
   formAction,
   pending,
   error,
@@ -87,7 +90,8 @@ function SharingChooser({
               Full visit
             </span>
             <span className="block text-sm text-zinc-600">
-              Summary, follow-up, and recommendations will be shared.
+              Summary, follow-up, recommendations, and attached documents will
+              be shared.
             </span>
           </span>
         </label>
@@ -103,18 +107,28 @@ function SharingChooser({
           />
           <span className="space-y-1">
             <span className="block text-sm font-medium text-zinc-900">
-              Recommendations only
+              Recommendations & documents only
             </span>
             <span className="block text-sm text-zinc-600">
-              Only the visit date and recommendations will be shared.
+              Only the visit date, recommendations, and attached documents will
+              be shared. Summary and follow-up will remain private.
             </span>
           </span>
         </label>
       </div>
 
+      <p className="text-xs text-zinc-500">
+        Documents added later to this published visit will also be visible to
+        the client.
+      </p>
+
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : submitLabel}
+          <ActionPendingLabel
+            pending={pending}
+            pendingLabel={pendingLabel}
+            idleLabel={submitLabel}
+          />
         </Button>
         <Button
           type="button"
@@ -154,6 +168,7 @@ function PublishSharingChooser({ visitId, onCancel }: PublishSharingChooserProps
       visitId={visitId}
       defaultScope="full"
       submitLabel="Confirm share"
+      pendingLabel="Publishing…"
       formAction={formAction}
       pending={pending}
       error={error}
@@ -188,6 +203,7 @@ function UpdateScopeSharingChooser({
       visitId={visitId}
       defaultScope={defaultScope}
       submitLabel="Update sharing"
+      pendingLabel="Updating…"
       formAction={formAction}
       pending={pending}
       error={error}
@@ -306,7 +322,11 @@ export function VisitPublicationBanner({ visit }: VisitPublicationBannerProps) {
             <form action={unpublishAction} onSubmit={handleUnpublish}>
               <input type="hidden" name="visitId" value={visit.id} />
               <Button type="submit" variant="outline" disabled={unpublishPending}>
-                {unpublishPending ? "Unpublishing…" : "Unpublish"}
+                <ActionPendingLabel
+                  pending={unpublishPending}
+                  pendingLabel="Unpublishing…"
+                  idleLabel="Unpublish"
+                />
               </Button>
             </form>
           </div>

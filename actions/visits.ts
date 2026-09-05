@@ -30,7 +30,7 @@ export type VisitWithDetails = Visit & {
 };
 
 export type VisitRecommendationWithProduct = VisitRecommendation & {
-  products: Pick<Product, "id" | "name"> | null;
+  products: Pick<Product, "id" | "name" | "is_active"> | null;
 };
 
 export async function getVisitForOwner(visitId: string) {
@@ -143,7 +143,7 @@ export async function publishVisitAction(
   const message =
     parsed.data.publicationScope === "full"
       ? "Full visit shared with client."
-      : "Recommendations shared with client.";
+      : "Recommendations and documents shared with client.";
 
   return actionSuccess({ message });
 }
@@ -186,7 +186,7 @@ export async function updateVisitPublicationScopeAction(
   const message =
     parsed.data.publicationScope === "full"
       ? "Sharing updated to full visit."
-      : "Sharing updated to recommendations only.";
+      : "Sharing updated to recommendations and documents only.";
 
   return actionSuccess({ message });
 }

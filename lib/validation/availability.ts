@@ -6,6 +6,21 @@ const timeStringSchema = z
   .trim()
   .regex(/^\d{2}:\d{2}(:\d{2})?$/, "Enter a valid time.");
 
+const endAfterStart = (
+  data: { startTime: string; endTime: string },
+  ctx: z.RefinementCtx,
+) => {
+  const start = timeToMinutes(data.startTime);
+  const end = timeToMinutes(data.endTime);
+  if (end <= start) {
+    ctx.addIssue({
+      code: "custom",
+      message: "End time must be after start time.",
+      path: ["endTime"],
+    });
+  }
+};
+
 export const availabilityFormSchema = z
   .object({
     dayOfWeek: z.coerce
@@ -16,18 +31,22 @@ export const availabilityFormSchema = z
     startTime: timeStringSchema,
     endTime: timeStringSchema,
   })
-  .superRefine((data, ctx) => {
-    const start = timeToMinutes(data.startTime);
-    const end = timeToMinutes(data.endTime);
-    if (end <= start) {
-      ctx.addIssue({
-        code: "custom",
-        message: "End time must be after start time.",
-        path: ["endTime"],
-      });
-    }
-  });
+  .superRefine(endAfterStart);
+
+export const specificDateAvailabilityFormSchema = z
+  .object({
+    specificDate: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Select a date."),
+    startTime: timeStringSchema,
+    endTime: timeStringSchema,
+  })
+  .superRefine(endAfterStart);
 
 export type AvailabilityFormInput = z.infer<typeof availabilityFormSchema>;
+export type SpecificDateAvailabilityFormInput = z.infer<
+  typeof specificDateAvailabilityFormSchema
+>;
 
 export const availabilityIdSchema = z.string().uuid("Invalid availability slot.");

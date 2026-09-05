@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { signInAction } from "@/actions/auth";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -64,7 +65,11 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
           ) : null}
 
           <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "Signing in…" : "Log in"}
+            <ActionPendingLabel
+              pending={pending}
+              pendingLabel="Signing in…"
+              idleLabel="Log in"
+            />
           </Button>
         </form>
 

@@ -11,13 +11,14 @@ export const appointmentStatusSchema = z.enum([
   "cancelled",
 ]);
 
-/** Client booking: selects a prepared slot (datetime-local) and linked client. */
+/** Client booking: selects an explicit availability slot for a calendar date. */
 export const clientBookAppointmentSchema = z.object({
   clientId: z.string().uuid("Select a business."),
-  startTimeLocal: z
+  availabilityId: z.string().uuid("Select an available time slot."),
+  dateKey: z
     .string()
     .trim()
-    .min(1, "Select an available time slot."),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Select a date."),
 });
 
 const optionalNotes = z

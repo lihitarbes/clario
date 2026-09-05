@@ -10,11 +10,11 @@ import {
   BLOCKING_APPOINTMENT_STATUSES,
   hasBlockingAppointmentOverlap,
 } from "@/lib/appointments/overlap";
-import { generateAvailableSlots } from "@/lib/appointments/slots";
 import {
-  isSlotAligned,
-  parseDateTimeLocal,
-} from "@/lib/appointments/time";
+  availabilityAppliesToDate,
+  listBookableSlots,
+} from "@/lib/appointments/slots";
+import { parseDateTimeLocal } from "@/lib/appointments/time";
 import {
   appointmentFormSchema,
   appointmentIdSchema,
@@ -450,21 +450,22 @@ export async function bookAppointmentAction(
 
   const parsed = clientBookAppointmentSchema.safeParse({
     clientId: formData.get("clientId"),
-    startTimeLocal: formData.get("startTimeLocal"),
+    availabilityId: formData.get("availabilityId"),
+    dateKey: formData.get("dateKey"),
   });
 
   if (!parsed.success) {
     return actionError(parsed.error.issues[0]?.message ?? "Invalid input.");
   }
 
-  const start = parseDateTimeLocal(parsed.data.startTimeLocal);
-  if (!start || !isSlotAligned(start)) {
+  const unavailableMessage =
+    "That time is no longer available. Please choose another slot.";
+
+  const dateLocal = new Date(`${parsed.data.dateKey}T00:00:00`);
+  if (Number.isNaN(dateLocal.getTime())) {
     return actionError("Select a valid available time slot.");
   }
-
-  if (start.getTime() <= Date.now()) {
-    return actionError("Appointments cannot be scheduled in the past.");
-  }
+  dateLocal.setHours(0, 0, 0, 0);
 
   const { supabase, profile } = auth.ctx;
 
@@ -486,7 +487,7 @@ export async function bookAppointmentAction(
 
   const { data: business, error: businessError } = await supabase
     .from("businesses")
-    .select("*")
+    .select("id")
     .eq("id", clientRow.business_id)
     .maybeSingle();
 
@@ -498,46 +499,59 @@ export async function bookAppointmentAction(
     return actionError("Business not found.");
   }
 
-  const durationMinutes = business.default_appointment_duration_minutes;
-  const startTimeIso = start.toISOString();
-  const endTimeIso = computeEndTimeIso(startTimeIso, durationMinutes);
-
-  const { data: availability, error: availabilityError } = await supabase
+  const { data: availabilityRows, error: availabilityError } = await supabase
     .from("business_availability")
-    .select("day_of_week, start_time, end_time")
+    .select("id, day_of_week, specific_date, start_time, end_time")
     .eq("business_id", business.id);
 
   if (availabilityError) {
     return actionError(mapAppointmentError(availabilityError.message));
   }
 
-  const dayStart = new Date(start);
-  dayStart.setHours(0, 0, 0, 0);
+  const availabilityRow = (availabilityRows ?? []).find(
+    (row) => row.id === parsed.data.availabilityId,
+  );
+  if (!availabilityRow) {
+    return actionError(unavailableMessage);
+  }
+
+  if (!availabilityAppliesToDate(dateLocal, availabilityRow)) {
+    return actionError(unavailableMessage);
+  }
 
   const { data: blocking, error: blockingError } = await supabase
     .from("appointments")
     .select("start_time, end_time")
     .eq("business_id", business.id)
     .in("status", [...BLOCKING_APPOINTMENT_STATUSES])
-    .lt("start_time", new Date(dayStart.getTime() + 86_400_000).toISOString())
-    .gt("end_time", dayStart.toISOString());
+    .lt("start_time", new Date(dateLocal.getTime() + 86_400_000).toISOString())
+    .gt("end_time", dateLocal.toISOString());
 
   if (blockingError) {
     return actionError(mapAppointmentError(blockingError.message));
   }
 
-  const available = generateAvailableSlots({
-    dateLocal: dayStart,
-    durationMinutes,
-    availability: availability ?? [],
+  const offered = listBookableSlots({
+    dateLocal,
+    availability: availabilityRows ?? [],
     blocking: blocking ?? [],
   });
 
-  if (!available.includes(parsed.data.startTimeLocal)) {
-    return actionError(
-      "That time is no longer available. Please choose another slot.",
-    );
+  const selected = offered.find(
+    (slot) => slot.availabilityId === parsed.data.availabilityId,
+  );
+  if (!selected) {
+    return actionError(unavailableMessage);
   }
+
+  const start = parseDateTimeLocal(selected.startLocal);
+  const end = parseDateTimeLocal(selected.endLocal);
+  if (!start || !end) {
+    return actionError("Select a valid available time slot.");
+  }
+
+  const startTimeIso = start.toISOString();
+  const endTimeIso = end.toISOString();
 
   try {
     const overlaps = await hasBlockingAppointmentOverlap(
@@ -547,9 +561,7 @@ export async function bookAppointmentAction(
       endTimeIso,
     );
     if (overlaps) {
-      return actionError(
-        "That time is no longer available. Please choose another slot.",
-      );
+      return actionError(unavailableMessage);
     }
   } catch (error) {
     return actionError(

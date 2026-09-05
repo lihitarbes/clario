@@ -2,6 +2,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { bookAppointmentAction } from "@/actions/appointments";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,11 +14,12 @@ import {
 import { Label } from "@/components/ui/label";
 import { DAY_OF_WEEK_LABELS } from "@/lib/appointments/constants";
 import {
-  generateAvailableSlots,
+  listBookableSlots,
   listUpcomingDates,
   slotTimeLabel,
-  type AvailabilityRangeInput,
+  type AvailabilitySlotRow,
   type BlockingIntervalInput,
+  type BookableSlot,
 } from "@/lib/appointments/slots";
 import { formatWeekParam } from "@/lib/appointments/time";
 import { cn } from "@/lib/utils";
@@ -26,8 +28,7 @@ export type BookingBusinessOption = {
   clientId: string;
   businessId: string;
   businessName: string;
-  durationMinutes: number;
-  availability: AvailabilityRangeInput[];
+  availability: AvailabilitySlotRow[];
 };
 
 type BookingWizardProps = {
@@ -44,7 +45,7 @@ export function BookingWizard({ businesses, blocking }: BookingWizardProps) {
   const [selectedDateKey, setSelectedDateKey] = useState(() =>
     formatWeekParam(new Date()),
   );
-  const [selectedSlot, setSelectedSlot] = useState<string>("");
+  const [selectedSlot, setSelectedSlot] = useState<BookableSlot | null>(null);
   const [state, formAction, pending] = useActionState(
     bookAppointmentAction,
     null,
@@ -67,9 +68,8 @@ export function BookingWizard({ businesses, blocking }: BookingWizardProps) {
     const businessBlocking = blocking.filter(
       (row) => row.business_id === selectedBusiness.businessId,
     );
-    return generateAvailableSlots({
+    return listBookableSlots({
       dateLocal,
-      durationMinutes: selectedBusiness.durationMinutes,
       availability: selectedBusiness.availability,
       blocking: businessBlocking,
     });
@@ -77,12 +77,12 @@ export function BookingWizard({ businesses, blocking }: BookingWizardProps) {
 
   function handleBusinessChange(clientId: string) {
     setSelectedClientId(clientId);
-    setSelectedSlot("");
+    setSelectedSlot(null);
   }
 
   function handleDateChange(dateKey: string) {
     setSelectedDateKey(dateKey);
-    setSelectedSlot("");
+    setSelectedSlot(null);
   }
 
   if (businesses.length === 0) {
@@ -141,8 +141,8 @@ export function BookingWizard({ businesses, blocking }: BookingWizardProps) {
                 Book with {selectedBusiness.businessName}
               </CardTitle>
               <CardDescription>
-                Appointments are {selectedBusiness.durationMinutes} minutes.
-                Requests need business approval.
+                Choose an open appointment slot. Requests need business
+                approval.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -179,7 +179,7 @@ export function BookingWizard({ businesses, blocking }: BookingWizardProps) {
 
               <div>
                 <p className="mb-2 text-sm font-medium text-zinc-900">
-                  Available times
+                  Available slots
                 </p>
                 {availableSlots.length === 0 ? (
                   <p className="text-sm text-zinc-600">
@@ -188,20 +188,31 @@ export function BookingWizard({ businesses, blocking }: BookingWizardProps) {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {availableSlots.map((slot) => {
-                      const isSelected = selectedSlot === slot;
+                      const isSelected =
+                        selectedSlot?.availabilityId === slot.availabilityId;
                       return (
                         <button
-                          key={slot}
+                          key={slot.availabilityId}
                           type="button"
                           onClick={() => setSelectedSlot(slot)}
                           className={cn(
-                            "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                            "rounded-md border px-3 py-2 text-left text-sm transition-colors",
                             isSelected
                               ? "border-zinc-900 bg-zinc-900 text-white"
                               : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50",
                           )}
                         >
-                          {slotTimeLabel(slot)}
+                          <span className="font-medium">
+                            {slotTimeLabel(slot.startLocal)}
+                          </span>
+                          <span
+                            className={cn(
+                              "mt-0.5 block text-xs",
+                              isSelected ? "text-zinc-200" : "text-zinc-500",
+                            )}
+                          >
+                            until {slotTimeLabel(slot.endLocal)}
+                          </span>
                         </button>
                       );
                     })}
@@ -217,14 +228,14 @@ export function BookingWizard({ businesses, blocking }: BookingWizardProps) {
                 <CardTitle className="text-base">Confirm request</CardTitle>
                 <CardDescription>
                   {selectedBusiness.businessName} ·{" "}
-                  {new Date(selectedSlot).toLocaleString(undefined, {
+                  {new Date(selectedSlot.startLocal).toLocaleString(undefined, {
                     weekday: "short",
                     month: "short",
                     day: "numeric",
                     hour: "2-digit",
                     minute: "2-digit",
                   })}{" "}
-                  ({selectedBusiness.durationMinutes} min)
+                  – {slotTimeLabel(selectedSlot.endLocal)}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -236,11 +247,16 @@ export function BookingWizard({ businesses, blocking }: BookingWizardProps) {
                   />
                   <input
                     type="hidden"
-                    name="startTimeLocal"
-                    value={selectedSlot}
+                    name="availabilityId"
+                    value={selectedSlot.availabilityId}
                   />
+                  <input type="hidden" name="dateKey" value={selectedDateKey} />
                   <Button type="submit" disabled={pending}>
-                    {pending ? "Submitting…" : "Request appointment"}
+                    <ActionPendingLabel
+                      pending={pending}
+                      pendingLabel="Booking…"
+                      idleLabel="Request appointment"
+                    />
                   </Button>
                   {state && !state.success ? (
                     <p className="text-sm text-red-600" role="alert">

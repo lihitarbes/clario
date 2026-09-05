@@ -5,6 +5,7 @@ import {
   approveAppointmentAction,
   rejectAppointmentAction,
 } from "@/actions/appointments";
+import { ActionPendingLabel } from "@/components/ui/action-pending-label";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -64,7 +65,11 @@ export function PendingAppointmentActions({
         <form action={approveAction}>
           <input type="hidden" name="appointmentId" value={appointmentId} />
           <Button type="submit" disabled={approvePending || rejectPending}>
-            {approvePending ? "Approving…" : "Approve"}
+            <ActionPendingLabel
+              pending={approvePending}
+              pendingLabel="Approving…"
+              idleLabel="Approve"
+            />
           </Button>
         </form>
 
@@ -75,7 +80,11 @@ export function PendingAppointmentActions({
             variant="outline"
             disabled={approvePending || rejectPending}
           >
-            {rejectPending ? "Declining…" : "Decline"}
+            <ActionPendingLabel
+              pending={rejectPending}
+              pendingLabel="Declining…"
+              idleLabel="Decline"
+            />
           </Button>
         </form>
 

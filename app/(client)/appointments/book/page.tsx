@@ -32,18 +32,28 @@ export default async function BookAppointmentPage() {
     businessIds.length > 0
       ? await supabase
           .from("business_availability")
-          .select("business_id, day_of_week, start_time, end_time")
+          .select(
+            "id, business_id, day_of_week, specific_date, start_time, end_time",
+          )
           .in("business_id", businessIds)
       : { data: [] };
 
   const availabilityByBusiness = new Map<
     string,
-    { day_of_week: number; start_time: string; end_time: string }[]
+    {
+      id: string;
+      day_of_week: number | null;
+      specific_date: string | null;
+      start_time: string;
+      end_time: string;
+    }[]
   >();
   for (const row of availabilityRows ?? []) {
     const list = availabilityByBusiness.get(row.business_id) ?? [];
     list.push({
+      id: row.id,
       day_of_week: row.day_of_week,
+      specific_date: row.specific_date,
       start_time: row.start_time,
       end_time: row.end_time,
     });
@@ -76,7 +86,6 @@ export default async function BookAppointmentPage() {
         clientId: client.id,
         businessId: business.id,
         businessName: business.name,
-        durationMinutes: business.default_appointment_duration_minutes,
         availability: availabilityByBusiness.get(business.id) ?? [],
       };
     })
@@ -95,8 +104,8 @@ export default async function BookAppointmentPage() {
           Book appointment
         </h1>
         <p className="mt-1 text-sm text-zinc-600">
-          Choose a date and an available time. Your request will wait for
-          business approval.
+          Choose a date and an open appointment slot. Your request will wait
+          for business approval.
         </p>
       </div>
 

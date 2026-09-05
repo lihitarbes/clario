@@ -55,6 +55,7 @@ async function validateProductForBusiness(
   >,
   productId: string | null,
   businessId: string,
+  options?: { requireActive?: boolean },
 ) {
   if (!productId) {
     return { ok: true as const };
@@ -62,7 +63,7 @@ async function validateProductForBusiness(
 
   const { data, error } = await supabase
     .from("products")
-    .select("id")
+    .select("id, is_active")
     .eq("id", productId)
     .eq("business_id", businessId)
     .maybeSingle();
@@ -73,6 +74,13 @@ async function validateProductForBusiness(
 
   if (!data) {
     return { ok: false as const, error: "Product not found in your catalog." };
+  }
+
+  if (options?.requireActive && !data.is_active) {
+    return {
+      ok: false as const,
+      error: "Choose an active catalog product.",
+    };
   }
 
   return { ok: true as const };
@@ -104,6 +112,7 @@ export async function createRecommendationAction(
     supabase,
     parsed.data.productId,
     business.id,
+    { requireActive: true },
   );
   if (!productCheck.ok) {
     return actionError(productCheck.error);
@@ -167,6 +176,11 @@ export async function updateRecommendationAction(
     supabase,
     parsed.data.productId,
     business.id,
+    {
+      requireActive:
+        parsed.data.productId !== null &&
+        parsed.data.productId !== lookup.recommendation.product_id,
+    },
   );
   if (!productCheck.ok) {
     return actionError(productCheck.error);

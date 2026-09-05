@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { AppointmentWithBusiness } from "@/actions/appointments";
 import { ClientAppointmentCard } from "@/components/appointments/ClientAppointmentCard";
+import { PreviousAppointmentsSection } from "@/components/appointments/PreviousAppointmentsSection";
 import { Button } from "@/components/ui/button";
 import { getLinkedClients } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -47,8 +48,7 @@ export default async function ClientAppointmentsPage() {
             My appointments
           </h1>
           <p className="mt-1 text-sm text-zinc-600">
-            View upcoming and past appointments. Requests need business
-            approval.
+            View upcoming appointments. Requests need business approval.
           </p>
         </div>
         <Button asChild>
@@ -91,22 +91,10 @@ export default async function ClientAppointmentsPage() {
             )}
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-lg font-medium text-zinc-900">Previous</h2>
-            {previous.length === 0 ? (
-              <p className="text-sm text-zinc-600">No previous appointments.</p>
-            ) : (
-              <ul className="space-y-3">
-                {previous.map((appointment) => (
-                  <ClientAppointmentCard
-                    key={appointment.id}
-                    appointment={appointment}
-                    showBusinessName={showBusinessName}
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
+          <PreviousAppointmentsSection
+            appointments={previous}
+            showBusinessName={showBusinessName}
+          />
         </>
       )}
     </div>
